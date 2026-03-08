@@ -10,6 +10,7 @@ class NotificationCreate(BaseModel):
     """Payload when creating a notification (from an agent tool call)."""
     title: str = Field(..., min_length=1, max_length=200)
     body: str = Field(..., min_length=1, max_length=2000)
+    content: str = Field(default="", max_length=10000)
     level: str = Field(
         default="info",
         pattern=r"^(info|success|warning|error)$",
@@ -24,6 +25,7 @@ class NotificationResponse(BaseModel):
     user_id: str
     title: str
     body: str
+    content: str = ""
     level: str  # info | success | warning | error
     agent_id: Optional[str] = None
     agent_name: Optional[str] = None

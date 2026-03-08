@@ -5,6 +5,7 @@ export interface NotificationData {
   user_id: string;
   title: string;
   body: string;
+  content?: string;
   level: "info" | "success" | "warning" | "error";
   agent_id?: string;
   agent_name?: string;
@@ -67,5 +68,59 @@ export async function updateNotificationPreferences(
     body: JSON.stringify(prefs),
   });
   if (!res.ok) throw new Error("Failed to update notification preferences");
+  return res.json();
+}
+
+// ── Notification channels ──────────────────────────────────
+
+export interface NotificationChannel {
+  id: string;
+  type: string;
+  address: string;
+  label: string;
+  enabled: boolean;
+}
+
+export async function fetchNotificationChannels(): Promise<NotificationChannel[]> {
+  const res = await fetch("/api/user/notification-channels");
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function addNotificationChannel(
+  channel: { type: string; address: string; label?: string }
+): Promise<NotificationChannel> {
+  const res = await fetch("/api/user/notification-channels", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(channel),
+  });
+  if (!res.ok) throw new Error("Failed to add channel");
+  return res.json();
+}
+
+export async function updateNotificationChannel(
+  id: string,
+  updates: { label?: string; address?: string; enabled?: boolean }
+): Promise<NotificationChannel> {
+  const res = await fetch(`/api/user/notification-channels/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) throw new Error("Failed to update channel");
+  return res.json();
+}
+
+export async function deleteNotificationChannel(id: string): Promise<void> {
+  await fetch(`/api/user/notification-channels/${id}`, { method: "DELETE" });
+}
+
+export async function testNotificationChannel(
+  id: string
+): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`/api/user/notification-channels/${id}/test`, {
+    method: "POST",
+  });
   return res.json();
 }

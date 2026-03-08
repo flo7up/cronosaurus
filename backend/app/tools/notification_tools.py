@@ -2,7 +2,9 @@
 Function tool definitions for the cross-agent notification / alert system.
 
 Agents call `send_notification` to push an alert to the user.
-Delivery (in-app bell, email, or both) is controlled by user preferences.
+The notification always appears in-app (bell icon).  Additionally it is
+delivered to every *enabled* notification channel the user has configured
+(e.g. email addresses).
 """
 
 import json
@@ -18,10 +20,14 @@ NOTIFICATION_TOOL_DEFINITIONS = [
         "name": "send_notification",
         "description": (
             "Send a notification/alert to the user. The notification appears "
-            "in the user's notification bell and may also be emailed, depending "
-            "on the user's notification preferences. Use this to inform the user "
-            "about important events — price alerts, completed tasks, trigger "
-            "results, errors, or anything worth flagging."
+            "in the user's notification bell and is also delivered to all "
+            "configured notification channels (e.g. email). "
+            "Use this to inform the user about important events — price alerts, "
+            "completed tasks, trigger results, reports, errors, or anything "
+            "worth flagging. "
+            "The 'content' field should contain a detailed report or full "
+            "analysis that will be included in the email; 'body' is a short "
+            "summary shown in the bell."
         ),
         "parameters": {
             "type": "object",
@@ -30,12 +36,23 @@ NOTIFICATION_TOOL_DEFINITIONS = [
                     "type": "string",
                     "description": (
                         "Short notification title, e.g. 'BTC Price Alert', "
-                        "'Email Sent', 'Task Complete'"
+                        "'Task Complete', 'Daily Report'"
                     ),
                 },
                 "body": {
                     "type": "string",
-                    "description": "Detailed notification message body.",
+                    "description": (
+                        "Short summary shown in the notification bell "
+                        "(1-2 sentences)."
+                    ),
+                },
+                "content": {
+                    "type": "string",
+                    "description": (
+                        "Detailed report or full analysis to include in email "
+                        "delivery. Can be multiple paragraphs. If omitted, "
+                        "the body is used instead."
+                    ),
                 },
                 "level": {
                     "type": "string",
@@ -74,6 +91,7 @@ def execute_notification_tool(
 
     title = arguments.get("title", "")
     body = arguments.get("body", "")
+    content = arguments.get("content", "")
     level = arguments.get("level", "info")
 
     if not title or not body:
@@ -83,44 +101,38 @@ def execute_notification_tool(
         from app.services.notification_service import notification_service
         from app.services.user_service import user_service
 
-        # Check user preferences
-        prefs = user_service.get_notification_preferences(user_id)
-        delivery = prefs.get("delivery", "all")
-
-        if delivery == "none":
-            return {
-                "success": True,
-                "delivered": False,
-                "reason": "User has muted all notifications.",
-            }
-
-        # Always create in-app notification (unless muted)
+        # Always create in-app notification
         doc = notification_service.create_notification(
             title=title,
             body=body,
+            content=content,
             level=level,
             agent_id=agent_id,
             agent_name=agent_name,
             user_id=user_id,
         )
 
-        email_sent = False
-
-        # Also send email if user chose "all"
-        if delivery == "all":
-            email_sent = _send_notification_email(
-                title=title,
-                body=body,
-                level=level,
-                agent_name=agent_name,
-                user_id=user_id,
-            )
+        # Deliver to all enabled channels
+        channels = user_service.get_enabled_notification_channels(user_id)
+        channels_sent = 0
+        for ch in channels:
+            if ch["type"] == "email":
+                ok = _send_to_email_channel(
+                    to_email=ch["address"],
+                    title=title,
+                    body=body,
+                    content=content,
+                    level=level,
+                    agent_name=agent_name,
+                )
+                if ok:
+                    channels_sent += 1
 
         return {
             "success": True,
             "delivered": True,
             "notification_id": doc["id"],
-            "email_sent": email_sent,
+            "channels_notified": channels_sent,
         }
 
     except Exception as e:
@@ -128,35 +140,44 @@ def execute_notification_tool(
         return {"success": False, "error": str(e)}
 
 
-def _send_notification_email(
+def _send_to_email_channel(
+    *,
+    to_email: str,
     title: str,
     body: str,
-    level: str,
-    agent_name: str | None,
-    user_id: str,
+    content: str = "",
+    level: str = "info",
+    agent_name: str | None = None,
+    user_id: str = "1",
 ) -> bool:
-    """Try to send the notification via the user's configured email account."""
+    """Send a notification email to a specific email channel address."""
     try:
         from app.services.user_service import user_service
         from app.tools.email_encryption import decrypt
 
         account = user_service.get_email_account(user_id)
         if not account:
-            logger.debug("No email account configured — skipping email notification")
+            logger.debug("No email account configured — cannot send to channel")
             return False
 
         password = decrypt(account["password_encrypted"])
         from_email = account["from_email"]
         from_name = account.get("from_name", "Cronosaurus")
-        to_email = from_email  # Send to self
 
-        level_emoji = {"info": "ℹ️", "success": "✅", "warning": "⚠️", "error": "❌"}.get(level, "🔔")
+        level_emoji = {
+            "info": "ℹ️", "success": "✅",
+            "warning": "⚠️", "error": "❌",
+        }.get(level, "🔔")
+
         subject = f"{level_emoji} {title}"
         if agent_name:
             subject += f" — {agent_name}"
 
+        # Use content for the detailed section, fall back to body
+        detail_text = content or body
+
         html_body = f"""
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 20px;">
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; color: #e0e0e0;">
                 <div style="font-size: 14px; color: #888; margin-bottom: 8px;">
                     🦖 Cronosaurus Notification{f' — {agent_name}' if agent_name else ''}
@@ -164,9 +185,12 @@ def _send_notification_email(
                 <h2 style="margin: 0 0 12px 0; color: #fff; font-size: 18px;">
                     {level_emoji} {title}
                 </h2>
-                <p style="margin: 0; line-height: 1.6; color: #ccc; white-space: pre-wrap;">
+                <p style="margin: 0 0 16px 0; line-height: 1.5; color: #aaa; font-size: 14px;">
                     {body}
                 </p>
+                <div style="border-top: 1px solid #333; padding-top: 16px; line-height: 1.7; color: #ccc; white-space: pre-wrap; font-size: 14px;">
+                    {detail_text}
+                </div>
             </div>
         </div>
         """
@@ -188,5 +212,5 @@ def _send_notification_email(
         return result.get("success", False)
 
     except Exception as e:
-        logger.warning("Failed to send notification email: %s", e)
+        logger.warning("Failed to send notification to %s: %s", to_email, e)
         return False

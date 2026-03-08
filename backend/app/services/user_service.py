@@ -802,5 +802,75 @@ class UserService:
         self._upsert_user(doc)
         return prefs
 
+    # ── Notification channels ─────────────────────────────────────────
+
+    def list_notification_channels(self, user_id: str = DEFAULT_USER_ID) -> list[dict]:
+        """Return all notification channels for the user."""
+        if not self._initialized:
+            return []
+        doc = self._get_user(user_id)
+        return doc.get("notification_channels", [])
+
+    def add_notification_channel(
+        self,
+        channel_type: str,
+        address: str,
+        label: str = "",
+        user_id: str = DEFAULT_USER_ID,
+    ) -> dict:
+        """Add a new notification channel. Returns the channel dict."""
+        import uuid
+        doc = self._get_user(user_id)
+        channels = doc.get("notification_channels", [])
+        ch = {
+            "id": str(uuid.uuid4()),
+            "type": channel_type,
+            "address": address,
+            "label": label or address,
+            "enabled": True,
+        }
+        channels.append(ch)
+        doc["notification_channels"] = channels
+        self._upsert_user(doc)
+        return ch
+
+    def update_notification_channel(
+        self,
+        channel_id: str,
+        updates: dict,
+        user_id: str = DEFAULT_USER_ID,
+    ) -> dict | None:
+        """Update a notification channel. Returns updated channel or None."""
+        doc = self._get_user(user_id)
+        channels = doc.get("notification_channels", [])
+        for ch in channels:
+            if ch["id"] == channel_id:
+                for k, v in updates.items():
+                    if k not in ("id", "type") and v is not None:
+                        ch[k] = v
+                doc["notification_channels"] = channels
+                self._upsert_user(doc)
+                return ch
+        return None
+
+    def delete_notification_channel(
+        self,
+        channel_id: str,
+        user_id: str = DEFAULT_USER_ID,
+    ) -> bool:
+        """Remove a notification channel."""
+        doc = self._get_user(user_id)
+        channels = doc.get("notification_channels", [])
+        new_channels = [c for c in channels if c["id"] != channel_id]
+        if len(new_channels) == len(channels):
+            return False
+        doc["notification_channels"] = new_channels
+        self._upsert_user(doc)
+        return True
+
+    def get_enabled_notification_channels(self, user_id: str = DEFAULT_USER_ID) -> list[dict]:
+        """Return only enabled channels."""
+        return [c for c in self.list_notification_channels(user_id) if c.get("enabled", True)]
+
 
 user_service = UserService()

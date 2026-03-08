@@ -398,20 +398,31 @@ Rules:
 
 NOTIFICATION_INSTRUCTIONS_SUFFIX = """
 
-You have access to a notification tool. Use it to send alerts to the user
-when something important happens — price thresholds, task completions,
-trigger results, errors, or anything the user would want to be notified about.
+You have access to a notification tool. Use it to send alerts and reports
+to the user. Notifications always appear in the bell icon AND are delivered
+to any notification channels the user has configured (e.g. email addresses).
 
 Tool: send_notification
 
+Parameters:
+- title: Short headline (e.g. "BTC Price Alert", "Daily Report")
+- body: Brief summary (1-2 sentences) shown in the notification bell.
+- content: Detailed report, full analysis, or extended information that
+  will be included in the email. This can be multiple paragraphs. If you
+  have data, tables, or analysis to share, put it here. If omitted, the
+  body text is used.
+- level: info | success | warning | error
+
 Rules:
-- Provide a short, descriptive title and a clear body message.
+- Always include a meaningful 'content' field when the notification is
+  about a report, analysis, or detailed findings. The user's email
+  channels will receive this content.
 - Use the appropriate level: info (general), success (completed), warning
   (attention needed), error (failure).
-- The notification will appear in the user's bell icon. If they have email
-  delivery enabled, it will also be emailed automatically.
 - Use this proactively during scheduled triggers to notify the user of
   important findings without them having to check the chat.
+- When a trigger task completes, send a notification with the full results
+  in the 'content' field so the user receives everything via email.
 """
 
 AZURE_COST_INSTRUCTIONS_SUFFIX = """

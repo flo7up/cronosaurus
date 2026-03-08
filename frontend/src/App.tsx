@@ -64,6 +64,7 @@ function App() {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [agentBusy, setAgentBusy] = useState(false);
+  const [streamingAgentId, setStreamingAgentId] = useState<string | null>(null);
   const [streamingTodos, setStreamingTodos] = useState<TodoItem[]>([]);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
@@ -308,6 +309,7 @@ function App() {
         [activeId]: [...(prev[activeId] || []), userMsg],
       }));
       setIsStreaming(true);
+      setStreamingAgentId(activeId);
       setStreamingContent("");
       setStreamingToolSteps([]);
       setStreamingTodos([]);
@@ -703,10 +705,10 @@ function App() {
       <ChatView
         messages={currentMessages}
         messagesLoading={messagesLoading}
-        streamingContent={streamingContent}
-        streamingToolSteps={streamingToolSteps}
-        streamingTodos={streamingTodos}
-        isStreaming={isStreaming}
+        streamingContent={activeId === streamingAgentId ? streamingContent : ""}
+        streamingToolSteps={activeId === streamingAgentId ? streamingToolSteps : []}
+        streamingTodos={activeId === streamingAgentId ? streamingTodos : []}
+        isStreaming={isStreaming && activeId === streamingAgentId}
         onSend={handleSend}
         onStop={handleStop}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}

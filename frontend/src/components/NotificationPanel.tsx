@@ -1,13 +1,16 @@
 import { useState, useEffect, useRef } from "react";
-import type { NotificationData, NotificationPreferences } from "../api/notification";
+import type { NotificationData, NotificationChannel } from "../api/notification";
 import {
   fetchNotifications,
   markNotificationRead,
   markAllNotificationsRead,
   deleteNotification,
   clearAllNotifications,
-  fetchNotificationPreferences,
-  updateNotificationPreferences,
+  fetchNotificationChannels,
+  addNotificationChannel,
+  updateNotificationChannel,
+  deleteNotificationChannel,
+  testNotificationChannel,
 } from "../api/notification";
 
 /* ── Level styling ─────────────────────────────────────────── */
@@ -40,39 +43,6 @@ const LEVEL_CONFIG: Record<
     text: "text-red-300",
   },
 };
-
-const DELIVERY_OPTIONS = [
-  {
-    value: "all" as const,
-    label: "In-app + Email",
-    desc: "Show in bell and send email",
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-      </svg>
-    ),
-  },
-  {
-    value: "in_app" as const,
-    label: "In-app only",
-    desc: "Show in bell, no email",
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-      </svg>
-    ),
-  },
-  {
-    value: "none" as const,
-    label: "Muted",
-    desc: "No notifications at all",
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.143 17.082a24.248 24.248 0 005.714 0m-5.714 0a3 3 0 115.714 0M3.124 13.772A8.967 8.967 0 005.75 9.75V9a6 6 0 0112 0v.75c0 2.123.8 4.057 2.118 5.52M3.124 13.772a23.91 23.91 0 007.019 2.26M3.124 13.772L2 15m18.876-1.228L22 15M3 3l18 18" />
-      </svg>
-    ),
-  },
-];
 
 /* ── Bell icon with badge ──────────────────────────────────── */
 export function NotificationBell({
@@ -122,15 +92,20 @@ export default function NotificationPanel({
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"all" | "unread">("all");
   const [showSettings, setShowSettings] = useState(false);
-  const [prefs, setPrefs] = useState<NotificationPreferences>({ delivery: "all" });
-  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [channels, setChannels] = useState<NotificationChannel[]>([]);
+  const [newEmail, setNewEmail] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+  const [addingChannel, setAddingChannel] = useState(false);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ id: string; ok: boolean; msg: string } | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Load notifications when panel opens
   useEffect(() => {
     if (!isOpen) return;
     loadNotifications();
-    loadPrefs();
+    loadChannels();
   }, [isOpen, tab]);
 
   // Close on click outside
@@ -156,10 +131,9 @@ export default function NotificationPanel({
     setLoading(false);
   }
 
-  async function loadPrefs() {
+  async function loadChannels() {
     try {
-      const p = await fetchNotificationPreferences();
-      setPrefs(p);
+      setChannels(await fetchNotificationChannels());
     } catch {
       // silent
     }
@@ -187,15 +161,48 @@ export default function NotificationPanel({
     setNotifications([]);
   }
 
-  async function handleUpdatePrefs(delivery: NotificationPreferences["delivery"]) {
-    setSavingPrefs(true);
+  async function handleAddChannel() {
+    if (!newEmail.trim()) return;
+    setAddingChannel(true);
     try {
-      const updated = await updateNotificationPreferences({ delivery });
-      setPrefs(updated);
+      const ch = await addNotificationChannel({
+        type: "email",
+        address: newEmail.trim(),
+        label: newLabel.trim() || undefined,
+      });
+      setChannels((prev) => [...prev, ch]);
+      setNewEmail("");
+      setNewLabel("");
     } catch {
       // silent
     }
-    setSavingPrefs(false);
+    setAddingChannel(false);
+  }
+
+  async function handleToggleChannel(id: string, enabled: boolean) {
+    try {
+      const updated = await updateNotificationChannel(id, { enabled });
+      setChannels((prev) => prev.map((c) => (c.id === id ? updated : c)));
+    } catch {
+      // silent
+    }
+  }
+
+  async function handleDeleteChannel(id: string) {
+    await deleteNotificationChannel(id);
+    setChannels((prev) => prev.filter((c) => c.id !== id));
+  }
+
+  async function handleTestChannel(id: string) {
+    setTestingId(id);
+    setTestResult(null);
+    try {
+      const result = await testNotificationChannel(id);
+      setTestResult({ id, ok: result.success, msg: result.message });
+    } catch {
+      setTestResult({ id, ok: false, msg: "Failed to test" });
+    }
+    setTestingId(null);
   }
 
   function timeAgo(iso: string): string {
@@ -238,7 +245,7 @@ export default function NotificationPanel({
             )}
           </div>
           <div className="flex items-center gap-1">
-            {/* Settings toggle */}
+            {/* Channels toggle */}
             <button
               onClick={() => setShowSettings(!showSettings)}
               className={`terminal-control p-1.5 transition-colors ${
@@ -246,7 +253,7 @@ export default function NotificationPanel({
                   ? "bg-[#22190e] text-[#fff0b0]"
                   : "text-[#b8ad78] hover:bg-[#1b160f] hover:text-[#fff0b0]"
               }`}
-              title="Notification settings"
+              title="Notification channels"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
@@ -265,42 +272,114 @@ export default function NotificationPanel({
           </div>
         </div>
 
-        {/* Settings panel (collapsible) */}
+        {/* Channel management panel (collapsible) */}
         {showSettings && (
           <div className="px-5 py-4 border-b border-[#f2c230]/10 bg-[#0e0c07]/80 space-y-3">
-            <p className="terminal-label text-[#97ff8a]">
-              delivery method
+            <p className="terminal-label text-[#97ff8a]">notification channels</p>
+            <p className="text-xs text-[#786d48]">
+              Add email addresses to receive notifications. More channel types coming soon.
             </p>
-            <div className="space-y-2">
-              {DELIVERY_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => handleUpdatePrefs(opt.value)}
-                  disabled={savingPrefs}
-                  className={`terminal-control w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${
-                    prefs.delivery === opt.value
-                      ? "bg-[#22190e] border-[#f2c230]/30 text-[#fff0b0]"
-                      : "text-[#b8ad78] hover:bg-[#1b160f]"
-                  }`}
-                >
-                  <span className={prefs.delivery === opt.value ? "text-[#97ff8a]" : "text-[#786d48]"}>
-                    {opt.icon}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium">{opt.label}</div>
-                    <div className="text-xs text-[#786d48]">{opt.desc}</div>
-                  </div>
-                  {prefs.delivery === opt.value && (
-                    <svg className="w-4 h-4 text-[#97ff8a] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+
+            {/* Existing channels */}
+            {channels.length > 0 && (
+              <div className="space-y-2">
+                {channels.map((ch) => (
+                  <div
+                    key={ch.id}
+                    className="terminal-control flex items-center gap-2 px-3 py-2"
+                  >
+                    {/* Email icon */}
+                    <svg className="w-4 h-4 text-[#786d48] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
                     </svg>
-                  )}
-                </button>
-              ))}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-[#dcca8a] truncate">{ch.address}</div>
+                      {ch.label && ch.label !== ch.address && (
+                        <div className="text-[10px] text-[#786d48]">{ch.label}</div>
+                      )}
+                    </div>
+                    {/* Test result */}
+                    {testResult?.id === ch.id && (
+                      <span className={`text-[10px] ${testResult.ok ? "text-[#97ff8a]" : "text-red-400"}`}>
+                        {testResult.ok ? "Sent!" : testResult.msg}
+                      </span>
+                    )}
+                    {/* Test button */}
+                    <button
+                      onClick={() => handleTestChannel(ch.id)}
+                      disabled={testingId === ch.id}
+                      className="text-[10px] text-[#b8ad78] hover:text-[#fff0b0] transition-colors px-1"
+                      title="Send test notification"
+                    >
+                      {testingId === ch.id ? (
+                        <div className="w-3 h-3 border border-[#786d48] border-t-[#f2c230] rounded-full animate-spin" />
+                      ) : (
+                        "Test"
+                      )}
+                    </button>
+                    {/* Toggle */}
+                    <button
+                      onClick={() => handleToggleChannel(ch.id, !ch.enabled)}
+                      className={`w-8 h-4 rounded-full transition-colors relative ${
+                        ch.enabled ? "bg-[#97ff8a]/30" : "bg-[#333]"
+                      }`}
+                      title={ch.enabled ? "Disable" : "Enable"}
+                    >
+                      <div
+                        className={`absolute top-0.5 w-3 h-3 rounded-full transition-all ${
+                          ch.enabled
+                            ? "right-0.5 bg-[#97ff8a]"
+                            : "left-0.5 bg-[#786d48]"
+                        }`}
+                      />
+                    </button>
+                    {/* Delete */}
+                    <button
+                      onClick={() => handleDeleteChannel(ch.id)}
+                      className="p-0.5 text-[#786d48] hover:text-red-400 transition-colors"
+                      title="Remove channel"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add new channel */}
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="email@example.com"
+                  className="terminal-input flex-1 text-sm px-3 py-1.5"
+                  onKeyDown={(e) => e.key === "Enter" && handleAddChannel()}
+                />
+                <input
+                  type="text"
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  placeholder="Label (optional)"
+                  className="terminal-input w-28 text-sm px-3 py-1.5"
+                  onKeyDown={(e) => e.key === "Enter" && handleAddChannel()}
+                />
+              </div>
+              <button
+                onClick={handleAddChannel}
+                disabled={!newEmail.trim() || addingChannel}
+                className="terminal-control w-full py-1.5 text-xs text-[#97ff8a] hover:bg-[#22190e] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {addingChannel ? "Adding..." : "+ Add email channel"}
+              </button>
             </div>
-            {prefs.delivery === "all" && (
-              <p className="text-xs text-[#786d48]">
-                Emails are sent to your configured email account.
+
+            {channels.length === 0 && (
+              <p className="text-xs text-[#5a5130] text-center py-2">
+                No channels configured. Add an email to receive notification reports.
               </p>
             )}
           </div>
@@ -365,6 +444,8 @@ export default function NotificationPanel({
             <div className="divide-y divide-[#f2c230]/10">
               {notifications.map((n) => {
                 const cfg = LEVEL_CONFIG[n.level] || LEVEL_CONFIG.info;
+                const isExpanded = expandedId === n.id;
+                const hasContent = !!(n.content && n.content !== n.body);
                 return (
                   <div
                     key={n.id}
@@ -393,10 +474,34 @@ export default function NotificationPanel({
                           <span className={`text-sm font-medium ${!n.read ? "text-[#fff0b0]" : "text-[#dcca8a]"}`}>
                             {n.title}
                           </span>
+                          {hasContent && (
+                            <button
+                              onClick={() => setExpandedId(isExpanded ? null : n.id)}
+                              className="text-[10px] text-[#786d48] hover:text-[#b8ad78] transition-colors"
+                              title={isExpanded ? "Collapse" : "Show full report"}
+                            >
+                              <svg
+                                className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                          )}
                         </div>
                         <p className="text-xs text-[#b8ad78] mt-0.5 line-clamp-2">
                           {n.body}
                         </p>
+                        {/* Expanded content */}
+                        {isExpanded && hasContent && (
+                          <div className="mt-2 p-3 rounded-lg bg-[#0e0c07]/60 border border-[#f2c230]/10">
+                            <p className="text-xs text-[#b8ad78] whitespace-pre-wrap leading-relaxed">
+                              {n.content}
+                            </p>
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 mt-1.5">
                           {n.agent_name && (
                             <span className="terminal-chip text-[10px] px-1.5 py-0.5">

@@ -112,8 +112,30 @@ class ToolLibraryBatchUpdate(BaseModel):
     updates: list[ToolLibraryUpdate]
 
 
+# ── Notification channels ────────────────────────────────────────
+
+class NotificationChannelCreate(BaseModel):
+    type: str = "email"  # "email" for now, extensible later
+    address: str  # e.g. email address
+    label: str = ""
+
+
+class NotificationChannelUpdate(BaseModel):
+    label: Optional[str] = None
+    address: Optional[str] = None
+    enabled: Optional[bool] = None
+
+
+class NotificationChannelResponse(BaseModel):
+    id: str
+    type: str
+    address: str
+    label: str = ""
+    enabled: bool = True
+
+
 class NotificationPreferencesUpdate(BaseModel):
-    delivery: str = "all"  # "all" | "in_app" | "none"
+    delivery: str = "all"  # kept for backward compat but ignored in new flow
 
 
 class UserPreferencesResponse(BaseModel):
@@ -124,3 +146,4 @@ class UserPreferencesResponse(BaseModel):
     email_configured: bool = False
     email_tested: bool = False
     notification_preferences: dict = {"delivery": "all"}
+    notification_channels: list[NotificationChannelResponse] = []

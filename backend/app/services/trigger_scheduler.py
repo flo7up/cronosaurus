@@ -19,7 +19,7 @@ class TriggerScheduler:
     def __init__(self):
         self._task: asyncio.Task | None = None
         self._running = False
-        self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="trigger")
+        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="trigger")
 
     async def start(self):
         """Start the scheduler loop. Safe to call multiple times."""
@@ -69,16 +69,17 @@ class TriggerScheduler:
         logger.info("Scheduler: %d due agent(s)", len(due_agents))
         loop = asyncio.get_running_loop()
 
-        for agent_doc in due_agents:
-            try:
-                await loop.run_in_executor(
-                    self._executor, self._fire_trigger_sync, agent_doc
-                )
-            except Exception as e:
+        tasks = [
+            loop.run_in_executor(self._executor, self._fire_trigger_sync, agent_doc)
+            for agent_doc in due_agents
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for agent_doc, result in zip(due_agents, results):
+            if isinstance(result, Exception):
                 logger.error(
                     "Failed to fire trigger for agent %s: %s",
                     agent_doc.get("id"),
-                    e,
+                    result,
                     exc_info=True,
                 )
 

@@ -16,6 +16,9 @@ from app.models.user import (
     EmailAccountUpdate,
     EmailAccountResponse,
     NotificationPreferencesUpdate,
+    NotificationChannelCreate,
+    NotificationChannelUpdate,
+    NotificationChannelResponse,
 )
 from app.services.user_service import user_service
 
@@ -47,6 +50,10 @@ def get_preferences():
         tool_library=tool_library,
         email_configured=len(email_accounts) > 0,
         notification_preferences=user_service.get_notification_preferences(),
+        notification_channels=[
+            NotificationChannelResponse(**c)
+            for c in user_service.list_notification_channels()
+        ],
     )
 
 
@@ -72,6 +79,67 @@ def update_notification_preferences(body: NotificationPreferencesUpdate):
     """Update notification delivery preferences."""
     _require_ready()
     return user_service.update_notification_preferences({"delivery": body.delivery})
+
+
+# ── Notification channels ─────────────────────────────────────────
+
+@router.get("/notification-channels", response_model=list[NotificationChannelResponse])
+def list_notification_channels():
+    _require_ready()
+    channels = user_service.list_notification_channels()
+    return [NotificationChannelResponse(**c) for c in channels]
+
+
+@router.post("/notification-channels", response_model=NotificationChannelResponse, status_code=201)
+def add_notification_channel(body: NotificationChannelCreate):
+    _require_ready()
+    ch = user_service.add_notification_channel(
+        channel_type=body.type,
+        address=body.address,
+        label=body.label,
+    )
+    return NotificationChannelResponse(**ch)
+
+
+@router.patch("/notification-channels/{channel_id}", response_model=NotificationChannelResponse)
+def update_notification_channel(channel_id: str, body: NotificationChannelUpdate):
+    _require_ready()
+    updates = body.model_dump(exclude_none=True)
+    ch = user_service.update_notification_channel(channel_id, updates)
+    if not ch:
+        raise HTTPException(404, "Channel not found")
+    return NotificationChannelResponse(**ch)
+
+
+@router.delete("/notification-channels/{channel_id}", status_code=204)
+def delete_notification_channel(channel_id: str):
+    _require_ready()
+    if not user_service.delete_notification_channel(channel_id):
+        raise HTTPException(404, "Channel not found")
+
+
+@router.post("/notification-channels/{channel_id}/test")
+def test_notification_channel(channel_id: str):
+    """Send a test notification to a specific channel."""
+    _require_ready()
+    channels = user_service.list_notification_channels()
+    channel = next((c for c in channels if c["id"] == channel_id), None)
+    if not channel:
+        raise HTTPException(404, "Channel not found")
+    if channel["type"] == "email":
+        from app.tools.notification_tools import _send_to_email_channel
+        ok = _send_to_email_channel(
+            to_email=channel["address"],
+            title="Test Notification",
+            body="This is a test notification from Cronosaurus.",
+            content="If you're reading this, your notification channel is working correctly! \U0001f996",
+            level="info",
+            agent_name="System",
+        )
+        if ok:
+            return {"success": True, "message": "Test email sent"}
+        return {"success": False, "message": "Failed to send — check email account settings"}
+    return {"success": False, "message": f"Unknown channel type: {channel['type']}"}
 
 
 @router.get("/tools", response_model=list[ToolPreference])
