@@ -9,7 +9,7 @@ from typing import Optional
 class AgentCreate(BaseModel):
     name: str = "New Agent"
     model: str = "gpt-4.1-mini"
-    tools: list[str] = Field(default_factory=lambda: ["crypto", "stock", "email_send", "email_read", "triggers", "notifications"])
+    tools: list[str] = Field(default_factory=lambda: ["crypto", "stock", "email_send", "email_read", "triggers", "notifications", "tool_management"])
     email_account_id: Optional[str] = None
 
 

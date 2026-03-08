@@ -81,9 +81,50 @@ from app.tools.weather_tools import (
     WEATHER_TOOL_NAMES,
     execute_weather_tool,
 )
+from app.tools.tool_management_tools import (
+    TOOL_MANAGEMENT_TOOL_DEFINITIONS,
+    TOOL_MANAGEMENT_TOOL_NAMES,
+    execute_tool_management_tool,
+)
 from app.services import mcp_client
 
 logger = logging.getLogger(__name__)
+
+# ── Thread-level image cache for tool-returned images ────────────
+# When a tool (e.g. Twitch capture) returns image_base64, the base64 is
+# stripped from the tool output (to avoid context explosion) and cached
+# here.  On the next user message the cached image is injected as a
+# proper image content block so the model can actually see it.
+
+_thread_images: dict[str, list[dict]] = {}
+_thread_images_lock = threading.Lock()
+
+
+def store_tool_image(thread_id: str, image_b64: str, media_type: str = "image/jpeg"):
+    """Cache an image extracted from a tool result."""
+    with _thread_images_lock:
+        _thread_images.setdefault(thread_id, []).append(
+            {"data": image_b64, "media_type": media_type}
+        )
+
+
+def pop_tool_images(thread_id: str) -> list[dict]:
+    """Retrieve and clear cached images for a thread."""
+    with _thread_images_lock:
+        return _thread_images.pop(thread_id, [])
+
+
+def strip_image_from_result(result: dict, thread_id: str) -> None:
+    """If a tool result contains image_base64, strip it and cache it."""
+    if isinstance(result, dict) and "image_base64" in result:
+        img_b64 = result.pop("image_base64")
+        media_type = result.pop("image_media_type", "image/jpeg")
+        store_tool_image(thread_id, img_b64, media_type)
+        result["image_note"] = (
+            "Image captured successfully. It will be provided for "
+            "visual analysis when the user asks."
+        )
+
 
 # Try to import types needed for function tool handling.
 try:
@@ -113,6 +154,7 @@ TOOL_CATALOG: dict[str, list[dict]] = {
     "notifications": NOTIFICATION_TOOL_DEFINITIONS,
     "azure_costs": AZURE_COST_TOOL_DEFINITIONS,
     "weather": WEATHER_TOOL_DEFINITIONS,
+    "tool_management": TOOL_MANAGEMENT_TOOL_DEFINITIONS,
 }
 
 # Metadata for the tool catalog API (label, description, category)
@@ -174,6 +216,12 @@ TOOL_CATALOG_META: dict[str, dict] = {
     "weather": {
         "label": "Weather",
         "description": "Get current weather conditions (temperature, humidity, wind) and up to 7-day forecasts for any city worldwide. Powered by the free Open-Meteo API — no API key needed.",
+        "category": "built-in",
+        "requires_config": False,
+    },
+    "tool_management": {
+        "label": "Tool Management",
+        "description": "Let the agent discover all available tools on the platform and activate or deactivate them on itself. Useful when the agent needs a capability it doesn't have yet.",
         "category": "built-in",
         "requires_config": False,
     },
@@ -401,6 +449,23 @@ Rules:
 - Temperatures are in Celsius. Convert to Fahrenheit if the user prefers.
 - Present weather information in a clear, concise format.
 - Mention notable conditions (rain, snow, extreme heat/cold).
+"""
+
+TOOL_MANAGEMENT_INSTRUCTIONS_SUFFIX = """
+
+You have access to tool-management tools that let you inspect and modify
+your own set of enabled tools at runtime.
+
+Tools: list_available_tools, activate_tools, deactivate_tools
+
+Rules:
+- Use list_available_tools to see every tool on the platform and which
+  ones are currently active on you.
+- Use activate_tools to enable new capabilities (e.g. web_search, weather)
+  when the user asks you to do something you cannot do yet.
+- Use deactivate_tools to disable tools the user no longer needs.
+- The 'tool_management' tool itself cannot be deactivated.
+- After activating or deactivating tools, briefly confirm the change.
 """
 
 CONFIRMATION_INSTRUCTIONS_SUFFIX = """
@@ -635,6 +700,8 @@ class AgentService:
             instructions += AZURE_COST_INSTRUCTIONS_SUFFIX
         if "weather" in tool_ids:
             instructions += WEATHER_INSTRUCTIONS_SUFFIX
+        if "tool_management" in tool_ids:
+            instructions += TOOL_MANAGEMENT_INSTRUCTIONS_SUFFIX
 
         # Add custom tool instructions
         for tid in tool_ids:
@@ -736,6 +803,16 @@ class AgentService:
                         foundry_agent_id, len(tool_defs),
                     )
             except Exception as e:
+                # If the update failed because the agent no longer exists
+                # server-side (expired/deleted), evict cache and recreate.
+                err_str = str(e).lower()
+                if "no such assistant" in err_str or "not found" in err_str:
+                    logger.warning(
+                        "Foundry agent %s gone server-side — will recreate: %s",
+                        foundry_agent_id, e,
+                    )
+                    self._foundry_agents.pop(foundry_agent_id, None)
+                    raise  # fall through to recreation below
                 logger.warning("Failed to update Foundry agent tools: %s", e)
             return agent
         except Exception:
@@ -947,6 +1024,10 @@ class AgentService:
             return execute_azure_cost_tool(tool_name=fn_name, arguments=fn_args)
         elif fn_name in WEATHER_TOOL_NAMES:
             return execute_weather_tool(tool_name=fn_name, arguments=fn_args)
+        elif fn_name in TOOL_MANAGEMENT_TOOL_NAMES:
+            return execute_tool_management_tool(
+                tool_name=fn_name, arguments=fn_args, agent_id=agent_id,
+            )
         elif fn_name.startswith("mcp_"):
             return self._execute_mcp_tool(fn_name, fn_args)
         else:
@@ -1173,6 +1254,18 @@ class AgentService:
             # Wait for any active runs (trigger, etc.) before adding a message
             self._wait_for_active_runs(thread_id, timeout=60, cancel_after=30)
 
+            # Merge any cached tool images (e.g. from a previous Twitch capture)
+            cached_imgs = pop_tool_images(thread_id)
+            if cached_imgs:
+                if images is None:
+                    images = []
+                for ci in cached_imgs:
+                    images.append({
+                        "data": ci["data"],
+                        "media_type": ci["media_type"],
+                        "data_uri": f"data:{ci['media_type']};base64,{ci['data']}",
+                    })
+
             # Build message content — multipart if images are attached
             if images:
                 from azure.ai.agents.models import (
@@ -1235,6 +1328,7 @@ class AgentService:
 
             # Tool-call loop
             round_count = 0
+            retry_attempted = False
             max_rounds = 20
             while (
                 _HAS_FUNCTION_TOOLS
@@ -1272,6 +1366,9 @@ class AgentService:
 
                         yield json.dumps({"type": "tool_result", "content": "", "data": {"name": fn_name, "result": result}})
 
+                        # Strip large image data before sending to the model
+                        strip_image_from_result(result, thread_id)
+
                         tool_outputs.append(
                             ToolOutput(tool_call_id=tc.id, output=json.dumps(result))
                         )
@@ -1297,8 +1394,58 @@ class AgentService:
             if run_status in ("failed", "cancelled", "expired"):
                 last_error = getattr(run, "last_error", None)
                 error_msg = ""
+                error_code = ""
                 if last_error:
                     error_msg = getattr(last_error, "message", "") or str(last_error)
+                    error_code = getattr(last_error, "code", "") or ""
+
+                # Retry once on transient Foundry failures
+                is_transient = (
+                    run_status == "failed"
+                    and (
+                        "something went wrong" in error_msg.lower()
+                        or error_code == "server_error"
+                        or not error_msg
+                    )
+                )
+                if is_transient and not retry_attempted:
+                    logger.warning(
+                        "stream_response: run %s failed with transient error — retrying once: %s",
+                        run.id, error_msg or "no details",
+                    )
+                    retry_attempted = True
+                    try:
+                        # Create a new run on the same thread (message already posted)
+                        retry_run = None
+                        with self.client.runs.stream(
+                            thread_id=thread_id,
+                            agent_id=foundry_agent.id,
+                        ) as retry_stream:
+                            for event_type, event_data, *_ in retry_stream:
+                                if isinstance(event_data, MessageDeltaChunk):
+                                    for part in event_data.delta.content:
+                                        if isinstance(part, MessageDeltaTextContent) and part.text:
+                                            text = part.text.value or ""
+                                            if text:
+                                                full_response += text
+                                                yield json.dumps({"type": "delta", "content": text})
+                                if hasattr(event_data, "status") and hasattr(event_data, "id"):
+                                    retry_run = event_data
+
+                        retry_status = getattr(retry_run, "status", None) if retry_run else None
+                        if retry_status == "completed" or full_response:
+                            yield json.dumps({"type": "done", "content": full_response})
+                            return
+                        # Retry also failed — fall through to error handling
+                        if retry_run:
+                            run = retry_run
+                            run_status = retry_status
+                            last_error = getattr(retry_run, "last_error", None)
+                            if last_error:
+                                error_msg = getattr(last_error, "message", "") or str(last_error)
+                    except Exception as retry_err:
+                        logger.warning("stream_response: retry also failed: %s", retry_err)
+
                 if run_status == "failed":
                     user_msg = f"The agent run failed. {('Details: ' + error_msg) if error_msg else 'Please try again.'}"
                 elif run_status == "cancelled":
@@ -1623,8 +1770,52 @@ class AgentService:
             if run.status != "completed":
                 last_error = getattr(run, "last_error", None)
                 error_msg = ""
+                error_code = ""
                 if last_error:
                     error_msg = getattr(last_error, "message", "") or str(last_error)
+                    error_code = getattr(last_error, "code", "") or ""
+
+                # Retry once on transient Foundry failures
+                is_transient = (
+                    run.status == "failed"
+                    and (
+                        "something went wrong" in error_msg.lower()
+                        or error_code == "server_error"
+                        or not error_msg
+                    )
+                )
+                if is_transient:
+                    logger.warning(
+                        "run_non_streaming: run %s failed with transient error — retrying once: %s",
+                        run.id, error_msg or "no details",
+                    )
+                    time.sleep(2)
+                    try:
+                        retry_run = self.client.runs.create(
+                            thread_id=thread_id,
+                            agent_id=foundry_agent.id,
+                        )
+                        for _poll in range(60):
+                            if retry_run.status in ("completed", "failed", "cancelled", "expired"):
+                                break
+                            time.sleep(1)
+                            retry_run = self.client.runs.get(thread_id=thread_id, run_id=retry_run.id)
+                        if retry_run.status == "completed":
+                            messages = self.client.messages.list(
+                                thread_id=thread_id,
+                                order=ListSortOrder.DESCENDING,
+                            )
+                            for msg in messages:
+                                if msg.role == "assistant" and msg.text_messages:
+                                    return msg.text_messages[-1].text.value
+                            return ""
+                        # Update run reference for the error handling below
+                        run = retry_run
+                        if run.last_error:
+                            error_msg = getattr(run.last_error, "message", "") or str(run.last_error)
+                    except Exception as retry_err:
+                        logger.warning("run_non_streaming: retry also failed: %s", retry_err)
+
                 logger.warning(
                     "run_non_streaming: run %s ended with status %s — %s",
                     run.id, run.status, error_msg or "no details",

@@ -64,6 +64,10 @@ def _create_af_tool_wrapper(
             "data": {"name": tool_name, "result": result},
         }))
 
+        # Strip large image data before returning to the model
+        from app.services.agent_service import strip_image_from_result
+        strip_image_from_result(result, thread_id_ref[0])
+
         return json.dumps(result)
 
     wrapper.__name__ = tool_name
@@ -134,6 +138,14 @@ def stream_response(
             logger.warning("Failed to create AF tool wrapper for %s: %s", td["name"], e)
 
     _store_message(thread_id, "user", content)
+
+    # Merge any cached tool images (e.g. from a previous Twitch capture)
+    from app.services.agent_service import pop_tool_images
+    cached_imgs = pop_tool_images(thread_id)
+    if cached_imgs:
+        if images is None:
+            images = []
+        images.extend(cached_imgs)
 
     # Build prompt with conversation history
     history_messages = get_messages(thread_id)
