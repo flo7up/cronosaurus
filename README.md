@@ -33,6 +33,16 @@ Create autonomous AI agents with a rich tool ecosystem, schedule recurring tasks
 - **Todo lists** — Agents break complex tasks into visible, trackable step-by-step lists
 - **Onboarding wizard** — Guided first-run setup — no `.env` editing required
 
+## Screenshots
+
+| Azure Cost Analysis | Building Progress Monitoring |
+|:---:|:---:|
+| ![Azure Cost Analysis](docs/images/azure-cost-analysis.png) | ![Building Progress Monitoring](docs/images/building-progress-monitoring.png) |
+
+| Mortgage Rate Tracking | Tool Management |
+|:---:|:---:|
+| ![Mortgage Rate Tracking](docs/images/mortgage-rate-tracking.png) | ![Tool Management](docs/images/tool-management.png) |
+
 ## Architecture
 
 ```
