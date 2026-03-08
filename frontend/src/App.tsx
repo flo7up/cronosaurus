@@ -290,6 +290,7 @@ function App() {
     setStreamingToolSteps([]);
     streamingToolStepsRef.current = [];
     setIsStreaming(false);
+    setStreamingAgentId(null);
   }, [activeId, streamingContent]);
 
   const handleSend = useCallback(
@@ -334,6 +335,7 @@ function App() {
           setStreamingContent("");
           if (controller.signal.aborted) {
             setIsStreaming(false);
+            setStreamingAgentId(null);
             return;
           }
         }
@@ -366,6 +368,7 @@ function App() {
             streamingToolStepsRef.current = [];
             setStreamingContent("");
             setIsStreaming(false);
+            setStreamingAgentId(null);
             setStreamingTodos([]);
             // Refresh agent data (trigger may have been modified by the agent)
             refreshAgent(agentId);
@@ -385,6 +388,7 @@ function App() {
             }));
             setStreamingContent("");
             setIsStreaming(false);
+            setStreamingAgentId(null);
             setStreamingToolSteps([]);
             streamingToolStepsRef.current = [];
             setStreamingTodos([]);
@@ -423,6 +427,7 @@ function App() {
         );
       } catch {
         setIsStreaming(false);
+        setStreamingAgentId(null);
         setStreamingContent("");
         setStreamingToolSteps([]);
         streamingToolStepsRef.current = [];
