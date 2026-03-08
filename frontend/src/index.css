@@ -1,0 +1,586 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --bg: #090805;
+  --panel: rgba(13, 11, 7, 0.96);
+  --panel-soft: rgba(18, 15, 10, 0.92);
+  --line: rgba(242, 194, 48, 0.18);
+  --line-strong: rgba(242, 194, 48, 0.34);
+  --text: #f3e9b2;
+  --text-dim: #b4a56a;
+  --brand: #f2c230;
+  --brand-strong: #ffdd63;
+  --brand-ink: #120f07;
+  --terminal-green: #97ff8a;
+}
+
+@layer utilities {
+  .animate-pulse-subtle {
+    animation: pulse-subtle 2s ease-in-out infinite;
+  }
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    color: var(--text);
+    font-family: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
+    background:
+      radial-gradient(circle at 50% 8%, rgba(242, 194, 48, 0.12) 0, rgba(242, 194, 48, 0.04) 18rem, transparent 19rem),
+      linear-gradient(180deg, #080705 0%, #060604 100%);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(180deg, rgba(255, 214, 84, 0.04), transparent 20%),
+      repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 4px),
+      repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.01) 0 1px, transparent 1px 10px);
+    opacity: 0.22;
+  }
+
+  h1,
+  h2,
+  h3,
+  .brand-display {
+    font-family: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
+    letter-spacing: -0.03em;
+  }
+
+  ::selection {
+    background: rgba(242, 194, 48, 0.32);
+    color: #fff9dc;
+  }
+}
+
+@layer components {
+  .app-shell {
+    background: transparent;
+  }
+
+  .app-shell button:not(.rounded-full),
+  .app-shell input,
+  .app-shell textarea,
+  .app-shell select {
+    border-radius: 0.35rem;
+  }
+
+  .app-shell input,
+  .app-shell textarea,
+  .app-shell select {
+    caret-color: var(--brand-strong);
+  }
+
+  .app-modal input,
+  .app-modal textarea,
+  .app-modal select {
+    background: rgba(18, 15, 10, 0.92) !important;
+    border-color: rgba(242, 194, 48, 0.18) !important;
+    color: var(--text) !important;
+  }
+
+  .app-modal input:focus,
+  .app-modal textarea:focus,
+  .app-modal select:focus,
+  .app-modal input:focus-visible,
+  .app-modal textarea:focus-visible,
+  .app-modal select:focus-visible {
+    outline: none;
+    border-color: rgba(255, 221, 99, 0.66) !important;
+    box-shadow: 0 0 0 1px rgba(255, 221, 99, 0.12), 0 0 16px rgba(242, 194, 48, 0.12);
+  }
+
+  .app-modal input::placeholder,
+  .app-modal textarea::placeholder {
+    color: #786d48 !important;
+  }
+
+  .app-sidebar {
+    background:
+      linear-gradient(180deg, rgba(9, 8, 5, 0.98), rgba(14, 11, 7, 0.96)),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0 1px, transparent 1px 5px);
+    border-color: var(--line);
+    backdrop-filter: blur(14px);
+  }
+
+  .app-content {
+    background:
+      radial-gradient(circle at top, rgba(242, 194, 48, 0.05), transparent 28rem),
+      linear-gradient(180deg, rgba(7, 6, 4, 0.96), rgba(9, 8, 5, 0.92));
+  }
+
+  .app-modal {
+    background:
+      linear-gradient(180deg, rgba(14, 11, 7, 0.99), rgba(10, 8, 5, 0.99)),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0 1px, transparent 1px 5px);
+    border: 1px solid var(--line-strong);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 221, 99, 0.08) inset, 0 0 26px rgba(242, 194, 48, 0.06);
+    backdrop-filter: blur(16px);
+  }
+
+  .brand-button-primary {
+    background: linear-gradient(135deg, var(--brand) 0%, var(--brand-strong) 100%);
+    color: var(--brand-ink);
+    box-shadow: 0 14px 34px rgba(242, 194, 48, 0.22);
+    border: 1px solid rgba(255, 239, 176, 0.18);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .brand-button-primary:hover {
+    filter: brightness(1.03);
+    transform: translateY(-1px);
+  }
+
+  .brand-button-primary:disabled {
+    box-shadow: none;
+  }
+
+  .terminal-panel {
+    background: linear-gradient(180deg, rgba(18, 15, 10, 0.96), rgba(12, 10, 7, 0.96));
+    border: 1px solid var(--line);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.01), 0 0 28px rgba(0, 0, 0, 0.18);
+  }
+
+  .terminal-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.8rem;
+    border-bottom: 1px solid rgba(242, 194, 48, 0.12);
+    color: var(--text-dim);
+    font-size: 0.69rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+
+  .terminal-titlebar::before,
+  .terminal-titlebar::after {
+    content: "";
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
+    background: rgba(242, 194, 48, 0.34);
+    box-shadow: 0 0 6px rgba(242, 194, 48, 0.22);
+  }
+
+  .terminal-control {
+    background: rgba(20, 17, 11, 0.92);
+    border: 1px solid rgba(242, 194, 48, 0.22);
+    color: var(--text);
+    border-radius: 0.35rem;
+    letter-spacing: 0.04em;
+  }
+
+  .terminal-control:focus,
+  .terminal-control:focus-visible {
+    outline: none;
+    border-color: rgba(255, 221, 99, 0.66);
+    box-shadow: 0 0 0 1px rgba(255, 221, 99, 0.12), 0 0 16px rgba(242, 194, 48, 0.12);
+  }
+
+  .terminal-control::placeholder {
+    color: #786d48;
+  }
+
+  .terminal-chip {
+    border: 1px solid rgba(242, 194, 48, 0.14);
+    background: rgba(28, 22, 12, 0.8);
+    color: var(--text-dim);
+    border-radius: 0.3rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .terminal-bubble {
+    background: linear-gradient(180deg, rgba(10, 18, 10, 0.95), rgba(8, 14, 8, 0.92));
+    border: 1px solid rgba(151, 255, 138, 0.2);
+    border-left: 3px solid rgba(151, 255, 138, 0.5);
+    border-radius: 0.4rem;
+    box-shadow: inset 0 0 0 1px rgba(151, 255, 138, 0.03), 0 0 20px rgba(151, 255, 138, 0.04);
+  }
+
+  .terminal-bubble-user {
+    background: linear-gradient(180deg, rgba(30, 22, 6, 0.95), rgba(22, 16, 4, 0.92));
+    border: 1px solid rgba(242, 194, 48, 0.28);
+    border-left: 3px solid rgba(242, 194, 48, 0.55);
+    border-radius: 0.4rem;
+    box-shadow: inset 0 0 0 1px rgba(242, 194, 48, 0.04), 0 0 20px rgba(242, 194, 48, 0.04);
+  }
+
+  .terminal-label {
+    color: var(--terminal-green);
+    font-size: 0.67rem;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .terminal-caret {
+    display: inline-block;
+    width: 0.6rem;
+    height: 1rem;
+    background: rgba(151, 255, 138, 0.85);
+    animation: pulse-subtle 1s steps(1) infinite;
+    vertical-align: text-bottom;
+    box-shadow: 0 0 8px rgba(151, 255, 138, 0.4);
+  }
+
+  .terminal-dot-grid {
+    background-image: radial-gradient(rgba(242, 194, 48, 0.16) 0.8px, transparent 0.8px);
+    background-size: 12px 12px;
+  }
+
+  @keyframes slide-in-left {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(0); }
+  }
+
+  .animate-slide-in-left {
+    animation: slide-in-left 150ms ease-out;
+  }
+
+  /* ── Global terminal overhaul ─────────────────────────────── */
+  /* Force all backgrounds, text, borders in app-shell/modal to terminal palette */
+
+  .app-shell .bg-gray-800,
+  .app-shell .bg-gray-800\/50,
+  .app-shell .bg-gray-800\/60,
+  .app-shell .bg-gray-900,
+  .app-shell .bg-gray-900\/50,
+  .app-modal .bg-gray-800,
+  .app-modal .bg-gray-800\/50,
+  .app-modal .bg-gray-800\/60,
+  .app-modal .bg-gray-900,
+  .app-modal .bg-gray-900\/50 {
+    background-color: rgba(18, 15, 10, 0.92) !important;
+  }
+
+  .app-shell .bg-gray-700,
+  .app-modal .bg-gray-700 {
+    background-color: rgba(28, 22, 12, 0.85) !important;
+  }
+
+  .app-shell .border-gray-700,
+  .app-shell .border-gray-700\/50,
+  .app-shell .border-gray-800,
+  .app-shell .border-gray-800\/50,
+  .app-modal .border-gray-700,
+  .app-modal .border-gray-700\/50,
+  .app-modal .border-gray-800,
+  .app-modal .border-gray-800\/50 {
+    border-color: rgba(242, 194, 48, 0.14) !important;
+  }
+
+  .app-shell .border-gray-600,
+  .app-modal .border-gray-600 {
+    border-color: rgba(242, 194, 48, 0.22) !important;
+  }
+
+  .app-shell .text-white,
+  .app-modal .text-white {
+    color: #f6efc9 !important;
+  }
+
+  .app-shell .text-gray-200,
+  .app-modal .text-gray-200 {
+    color: #f0e6b0 !important;
+  }
+
+  .app-shell .text-gray-300,
+  .app-modal .text-gray-300 {
+    color: #dcca8a !important;
+  }
+
+  .app-shell .text-gray-400,
+  .app-modal .text-gray-400 {
+    color: #b8ad78 !important;
+  }
+
+  .app-shell .text-gray-500,
+  .app-modal .text-gray-500 {
+    color: #8b7f59 !important;
+  }
+
+  .app-shell .text-gray-600,
+  .app-modal .text-gray-600 {
+    color: #786d48 !important;
+  }
+
+  .app-shell .placeholder-gray-500::placeholder,
+  .app-modal .placeholder-gray-500::placeholder {
+    color: #786d48 !important;
+  }
+
+  /* Purple ➝ gold/green terminal accents */
+  .app-shell .bg-purple-600,
+  .app-modal .bg-purple-600 {
+    background-color: #152212 !important;
+    border: 1px solid rgba(151, 255, 138, 0.3);
+  }
+
+  .app-shell .bg-purple-900\/20,
+  .app-modal .bg-purple-900\/20 {
+    background-color: rgba(21, 34, 18, 0.5) !important;
+  }
+
+  .app-shell .bg-purple-900\/40,
+  .app-modal .bg-purple-900\/40 {
+    background-color: rgba(21, 34, 18, 0.6) !important;
+  }
+
+  .app-shell .text-purple-300,
+  .app-modal .text-purple-300 {
+    color: #97ff8a !important;
+  }
+
+  .app-shell .text-purple-400,
+  .app-modal .text-purple-400 {
+    color: #97ff8a !important;
+  }
+
+  .app-shell .border-purple-500,
+  .app-shell .border-purple-500\/40,
+  .app-shell .border-purple-500\/50,
+  .app-shell .border-purple-600,
+  .app-shell .border-purple-700,
+  .app-modal .border-purple-500,
+  .app-modal .border-purple-500\/40,
+  .app-modal .border-purple-500\/50,
+  .app-modal .border-purple-600,
+  .app-modal .border-purple-700 {
+    border-color: rgba(151, 255, 138, 0.3) !important;
+  }
+
+  .app-shell .hover\:text-purple-300:hover,
+  .app-modal .hover\:text-purple-300:hover {
+    color: #c3ffba !important;
+  }
+
+  .app-shell .focus\:border-purple-500:focus,
+  .app-modal .focus\:border-purple-500:focus {
+    border-color: rgba(255, 221, 99, 0.66) !important;
+  }
+
+  /* Blue ➝ amber/gold */
+  .app-shell .bg-blue-600,
+  .app-modal .bg-blue-600 {
+    background-color: rgba(242, 194, 48, 0.7) !important;
+    color: #120f07 !important;
+  }
+
+  .app-shell .bg-blue-600\/30,
+  .app-modal .bg-blue-600\/30 {
+    background-color: rgba(242, 194, 48, 0.18) !important;
+  }
+
+  .app-shell .bg-blue-900\/40,
+  .app-modal .bg-blue-900\/40 {
+    background-color: rgba(58, 45, 16, 0.5) !important;
+  }
+
+  .app-shell .text-blue-300,
+  .app-modal .text-blue-300 {
+    color: #ffd86d !important;
+  }
+
+  .app-shell .text-blue-400,
+  .app-modal .text-blue-400 {
+    color: #f2c230 !important;
+  }
+
+  .app-shell .text-blue-500,
+  .app-modal .text-blue-500 {
+    color: #f2c230 !important;
+  }
+
+  .app-shell .border-blue-500,
+  .app-shell .border-blue-600,
+  .app-shell .border-blue-700,
+  .app-modal .border-blue-500,
+  .app-modal .border-blue-600,
+  .app-modal .border-blue-700 {
+    border-color: rgba(242, 194, 48, 0.4) !important;
+  }
+
+  .app-shell .hover\:bg-blue-400:hover,
+  .app-shell .hover\:text-blue-400:hover,
+  .app-modal .hover\:bg-blue-400:hover,
+  .app-modal .hover\:text-blue-400:hover {
+    color: #ffdd63 !important;
+  }
+
+  .app-shell .hover\:bg-blue-500:hover,
+  .app-modal .hover\:bg-blue-500:hover {
+    background-color: rgba(242, 194, 48, 0.8) !important;
+  }
+
+  .app-shell .focus\:border-blue-500:focus,
+  .app-modal .focus\:border-blue-500:focus {
+    border-color: rgba(255, 221, 99, 0.66) !important;
+    box-shadow: 0 0 0 1px rgba(255, 221, 99, 0.12), 0 0 16px rgba(242, 194, 48, 0.12);
+  }
+
+  .app-shell .focus\:border-gray-500:focus,
+  .app-shell .focus\:border-gray-400:focus,
+  .app-modal .focus\:border-gray-500:focus,
+  .app-modal .focus\:border-gray-400:focus {
+    border-color: rgba(255, 221, 99, 0.66) !important;
+    box-shadow: 0 0 0 1px rgba(255, 221, 99, 0.12), 0 0 16px rgba(242, 194, 48, 0.12);
+  }
+
+  .app-shell .focus\:border-green-500:focus,
+  .app-modal .focus\:border-green-500:focus,
+  .app-shell .focus\:border-amber-500:focus,
+  .app-modal .focus\:border-amber-500:focus {
+    border-color: rgba(255, 221, 99, 0.66) !important;
+    box-shadow: 0 0 0 1px rgba(255, 221, 99, 0.12), 0 0 16px rgba(242, 194, 48, 0.12);
+  }
+
+  /* White primary buttons ➝ brand gold */
+  .app-shell .bg-white,
+  .app-modal .bg-white {
+    background: linear-gradient(135deg, #f2c230 0%, #ffdd63 100%) !important;
+    color: #120f07 !important;
+    border: 1px solid rgba(255, 239, 176, 0.18);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+  }
+
+  .app-shell .hover\:bg-gray-200:hover,
+  .app-modal .hover\:bg-gray-200:hover {
+    background: linear-gradient(135deg, #ffdd63 0%, #ffe87f 100%) !important;
+    color: #120f07 !important;
+  }
+
+  .app-shell .text-black,
+  .app-modal .text-black {
+    color: #120f07 !important;
+  }
+
+  /* Toggle knobs — round to square */
+  .app-shell .rounded-full,
+  .app-modal .rounded-full {
+    border-radius: 0.25rem;
+  }
+
+  /* Make all divide borders terminal-colored */
+  .app-shell .divide-gray-700 > :not([hidden]) ~ :not([hidden]),
+  .app-shell .divide-gray-800 > :not([hidden]) ~ :not([hidden]),
+  .app-shell .divide-gray-800\/50 > :not([hidden]) ~ :not([hidden]),
+  .app-modal .divide-gray-700 > :not([hidden]) ~ :not([hidden]),
+  .app-modal .divide-gray-800 > :not([hidden]) ~ :not([hidden]) {
+    border-color: rgba(242, 194, 48, 0.14) !important;
+  }
+
+  /* Hover backgrounds */
+  .app-shell .hover\:bg-gray-700:hover,
+  .app-modal .hover\:bg-gray-700:hover,
+  .app-shell .hover\:bg-gray-800:hover,
+  .app-modal .hover\:bg-gray-800:hover,
+  .app-shell .hover\:bg-gray-800\/60:hover,
+  .app-modal .hover\:bg-gray-800\/60:hover,
+  .app-shell .hover\:bg-gray-700\/50:hover,
+  .app-modal .hover\:bg-gray-700\/50:hover,
+  .app-shell .hover\:bg-gray-800\/40:hover,
+  .app-modal .hover\:bg-gray-800\/40:hover,
+  .app-shell .hover\:bg-gray-800\/50:hover,
+  .app-modal .hover\:bg-gray-800\/50:hover {
+    background-color: rgba(27, 22, 15, 0.75) !important;
+  }
+
+  .app-shell .hover\:text-white:hover,
+  .app-modal .hover\:text-white:hover {
+    color: #fff0b0 !important;
+  }
+
+  .app-shell .hover\:border-gray-600:hover,
+  .app-modal .hover\:border-gray-600:hover,
+  .app-shell .hover\:border-gray-500:hover,
+  .app-modal .hover\:border-gray-500:hover {
+    border-color: rgba(242, 194, 48, 0.36) !important;
+  }
+
+  /* Green toggle/status accents stay green but muted */
+  .app-shell .bg-green-600,
+  .app-modal .bg-green-600 {
+    background-color: rgba(21, 34, 18, 0.9) !important;
+    border: 1px solid rgba(151, 255, 138, 0.4);
+  }
+
+  .app-shell .bg-gray-600,
+  .app-modal .bg-gray-600 {
+    background-color: rgba(22, 18, 12, 0.9) !important;
+    border: 1px solid rgba(242, 194, 48, 0.18);
+  }
+
+  /* Notification badge stays visible */
+  .app-shell .bg-red-500 {
+    background-color: #d43030 !important;
+  }
+
+  /* Round-xl ➝ sharper */
+  .app-shell .rounded-xl,
+  .app-modal .rounded-xl {
+    border-radius: 0.35rem !important;
+  }
+
+  .app-shell .rounded-lg,
+  .app-modal .rounded-lg {
+    border-radius: 0.3rem !important;
+  }
+
+  .app-shell .rounded-md,
+  .app-modal .rounded-md {
+    border-radius: 0.25rem !important;
+  }
+}
+
+@keyframes pulse-subtle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(242, 194, 48, 0.46);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 221, 99, 0.64);
+}
