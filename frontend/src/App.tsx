@@ -66,6 +66,7 @@ function App() {
   const [agentBusy, setAgentBusy] = useState(false);
   const [streamingAgentId, setStreamingAgentId] = useState<string | null>(null);
   const [streamingTodos, setStreamingTodos] = useState<TodoItem[]>([]);
+  const [streamingImages, setStreamingImages] = useState<Array<{ data: string; media_type: string }>>([]);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
 
@@ -267,7 +268,7 @@ function App() {
       abortRef.current = null;
     }
     // Commit whatever has streamed so far as an assistant message
-    const agentId = activeId;
+    const agentId = streamingAgentId;
     if (agentId) {
       const partial = streamingContent || "";
       const steps = streamingToolStepsRef.current;
@@ -291,7 +292,8 @@ function App() {
     streamingToolStepsRef.current = [];
     setIsStreaming(false);
     setStreamingAgentId(null);
-  }, [activeId, streamingContent]);
+    setStreamingImages([]);
+  }, [streamingAgentId, streamingContent]);
 
   const handleSend = useCallback(
     async (content: string, images?: Array<{ data: string; media_type: string }>) => {
@@ -314,6 +316,7 @@ function App() {
       setStreamingContent("");
       setStreamingToolSteps([]);
       setStreamingTodos([]);
+      setStreamingImages([]);
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -360,6 +363,10 @@ function App() {
             if (steps.length > 0) {
               assistantMsg.toolSteps = [...steps];
             }
+            setStreamingImages((imgs) => {
+              if (imgs.length > 0) assistantMsg.images = [...imgs];
+              return [];
+            });
             setMessagesCache((prev) => ({
               ...prev,
               [agentId]: [...(prev[agentId] || []), assistantMsg],
@@ -392,6 +399,7 @@ function App() {
             setStreamingToolSteps([]);
             streamingToolStepsRef.current = [];
             setStreamingTodos([]);
+            setStreamingImages([]);
           },
           controller.signal,
           () => refreshAgent(agentId),
@@ -424,6 +432,10 @@ function App() {
             );
           },
           images,
+          // onImage — tool-captured image (e.g. Twitch)
+          (img: { data: string; media_type: string }) => {
+            setStreamingImages((prev) => [...prev, img]);
+          },
         );
       } catch {
         setIsStreaming(false);
@@ -432,6 +444,7 @@ function App() {
         setStreamingToolSteps([]);
         streamingToolStepsRef.current = [];
         setStreamingTodos([]);
+        setStreamingImages([]);
       }
     },
     [activeId, isStreaming, handleStop, refreshAgent]
@@ -713,6 +726,7 @@ function App() {
         streamingContent={activeId === streamingAgentId ? streamingContent : ""}
         streamingToolSteps={activeId === streamingAgentId ? streamingToolSteps : []}
         streamingTodos={activeId === streamingAgentId ? streamingTodos : []}
+        streamingImages={activeId === streamingAgentId ? streamingImages : []}
         isStreaming={isStreaming && activeId === streamingAgentId}
         onSend={handleSend}
         onStop={handleStop}

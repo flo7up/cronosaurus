@@ -10,6 +10,7 @@ This service handles:
 - Tool-call dispatch (trigger, crypto, stock, email tools)
 """
 
+import base64
 import json
 import logging
 import threading
@@ -114,8 +115,8 @@ def pop_tool_images(thread_id: str) -> list[dict]:
         return _thread_images.pop(thread_id, [])
 
 
-def strip_image_from_result(result: dict, thread_id: str) -> None:
-    """If a tool result contains image_base64, strip it and cache it."""
+def strip_image_from_result(result: dict, thread_id: str) -> dict | None:
+    """If a tool result contains image_base64, strip it, cache it, and return the image dict."""
     if isinstance(result, dict) and "image_base64" in result:
         img_b64 = result.pop("image_base64")
         media_type = result.pop("image_media_type", "image/jpeg")
@@ -124,6 +125,16 @@ def strip_image_from_result(result: dict, thread_id: str) -> None:
             "Image captured successfully. It will be provided for "
             "visual analysis when the user asks."
         )
+        return {"data": img_b64, "media_type": media_type}
+    return None
+
+
+IMAGE_FOLLOW_UP_PROMPT = (
+    "Use the attached image(s) captured during your previous tool call to continue "
+    "and complete the user's last request. Analyze the image(s) directly, reuse the "
+    "existing conversation context, and finish the task. You may call other tools "
+    "again if they are needed, but do not ask the user to resend the image(s)."
+)
 
 
 # Try to import types needed for function tool handling.
@@ -862,6 +873,121 @@ class AgentService:
         except Exception:
             pass
 
+    def _build_message_content(
+        self,
+        content: str,
+        images: list[dict] | None = None,
+    ) -> tuple[object, list[str]]:
+        """Build a Foundry message payload and upload inline images if needed."""
+        if not images:
+            return content, []
+
+        from azure.ai.agents.models import (
+            FilePurpose,
+            MessageImageFileParam,
+            MessageInputImageFileBlock,
+            MessageInputTextBlock,
+        )
+
+        content_parts = [MessageInputTextBlock(text=content)]
+        uploaded_file_ids: list[str] = []
+        for img in images:
+            file_id = img.get("file_id")
+            if not file_id:
+                image_bytes, media_type, filename = self._decode_image_payload(img)
+                if not image_bytes:
+                    continue
+                media_type = self._normalize_image_media_type(media_type)
+                uploaded = self.client.files.upload_and_poll(
+                    file=(filename, image_bytes, media_type),
+                    purpose=FilePurpose.AGENTS,
+                    polling_interval=1,
+                    timeout=60,
+                )
+                file_id = uploaded.id
+                uploaded_file_ids.append(file_id)
+            if not file_id:
+                continue
+            content_parts.append(
+                MessageInputImageFileBlock(
+                    image_file=MessageImageFileParam(file_id=file_id)
+                )
+            )
+
+        return (content_parts if len(content_parts) > 1 else content), uploaded_file_ids
+
+    def _decode_image_payload(self, image: dict) -> tuple[bytes | None, str, str]:
+        """Decode an image payload dict into bytes, media type, and filename."""
+        media_type = image.get("media_type") or "image/jpeg"
+        filename = image.get("filename") or f"cronosaurus-image-{int(time.time() * 1000)}.{self._guess_image_extension(media_type)}"
+
+        file_bytes = image.get("bytes")
+        if isinstance(file_bytes, (bytes, bytearray)):
+            return bytes(file_bytes), media_type, filename
+
+        file_data = image.get("data")
+        if isinstance(file_data, str) and file_data:
+            return base64.b64decode(file_data), media_type, filename
+
+        data_uri = image.get("data_uri")
+        if isinstance(data_uri, str) and data_uri.startswith("data:"):
+            header, _, encoded = data_uri.partition(",")
+            if not encoded:
+                return None, media_type, filename
+            if ";base64" in header:
+                media_type = header[5:].split(";", 1)[0] or media_type
+                filename = image.get("filename") or f"cronosaurus-image-{int(time.time() * 1000)}.{self._guess_image_extension(media_type)}"
+                return base64.b64decode(encoded), media_type, filename
+
+        return None, media_type, filename
+
+    @staticmethod
+    def _normalize_image_media_type(media_type: str) -> str:
+        """Normalize common image MIME aliases to the values Azure accepts."""
+        normalized = (media_type or "image/jpeg").strip().lower()
+        aliases = {
+            "image/jpg": "image/jpeg",
+            "image/pjpeg": "image/jpeg",
+        }
+        return aliases.get(normalized, normalized)
+
+    @staticmethod
+    def _guess_image_extension(media_type: str) -> str:
+        """Guess a filename extension from a media type."""
+        return {
+            "image/jpeg": "jpg",
+            "image/jpg": "jpg",
+            "image/png": "png",
+            "image/gif": "gif",
+            "image/webp": "webp",
+        }.get((media_type or "").lower(), "img")
+
+    def _delete_uploaded_files(self, file_ids: list[str]) -> None:
+        """Best-effort cleanup for temporary uploaded image files."""
+        if not self.client:
+            return
+        for file_id in file_ids:
+            try:
+                self.client.files.delete(file_id)
+            except Exception as e:
+                logger.warning("Failed to delete temporary image file %s: %s", file_id, e)
+
+    def _post_user_message(
+        self,
+        *,
+        thread_id: str,
+        content: str,
+        images: list[dict] | None = None,
+    ) -> list[str]:
+        """Post a user message to a Foundry thread."""
+        message_content, uploaded_file_ids = self._build_message_content(content, images)
+        self.client.messages.create(
+            thread_id=thread_id,
+            role="user",
+            content=message_content,
+        )
+        return uploaded_file_ids
+
     # ── Messages ─────────────────────────────────────────────────
 
     def get_messages(self, thread_id: str, provider: str | None = None) -> list[dict]:
@@ -1206,6 +1332,7 @@ class AgentService:
         tools: list[str] | None = None,
         provider: str | None = None,
         images: list[dict] | None = None,
+        allow_image_follow_up: bool = True,
     ) -> Generator[str, None, None]:
         """Send a user message and stream the assistant response as SSE JSON lines."""
         provider = (provider or self.provider or "azure_foundry").strip().lower()
@@ -1249,6 +1376,8 @@ class AgentService:
             yield json.dumps({"type": "error", "content": "Service not available"})
             return
 
+        uploaded_file_ids: list[str] = []
+
         try:
             foundry_agent = self.ensure_foundry_agent(
                 agent_id=agent_id,
@@ -1277,32 +1406,11 @@ class AgentService:
                         "data_uri": f"data:{ci['media_type']};base64,{ci['data']}",
                     })
 
-            # Build message content — multipart if images are attached
-            if images:
-                from azure.ai.agents.models import (
-                    MessageInputTextBlock,
-                    MessageInputImageUrlBlock,
-                    MessageImageUrlParam,
-                )
-                content_parts = [MessageInputTextBlock(text=content)]
-                for img in images:
-                    content_parts.append(
-                        MessageInputImageUrlBlock(
-                            image_url=MessageImageUrlParam(url=img["data_uri"])
-                        )
-                    )
-                self.client.messages.create(
-                    thread_id=thread_id,
-                    role="user",
-                    content=content_parts,
-                )
-            else:
-                # Add user message (plain text)
-                self.client.messages.create(
-                    thread_id=thread_id,
-                    role="user",
-                    content=content,
-                )
+            uploaded_file_ids = self._post_user_message(
+                thread_id=thread_id,
+                content=content,
+                images=images,
+            )
 
             full_response = ""
 
@@ -1378,7 +1486,9 @@ class AgentService:
                         yield json.dumps({"type": "tool_result", "content": "", "data": {"name": fn_name, "result": result}})
 
                         # Strip large image data before sending to the model
-                        strip_image_from_result(result, thread_id)
+                        img_dict = strip_image_from_result(result, thread_id)
+                        if img_dict:
+                            yield json.dumps({"type": "image", "content": "", "data": img_dict})
 
                         tool_outputs.append(
                             ToolOutput(tool_call_id=tc.id, output=json.dumps(result))
@@ -1479,6 +1589,46 @@ class AgentService:
                 yield json.dumps({"type": "done", "content": ""})
                 return
 
+            generated_imgs = pop_tool_images(thread_id)
+            if generated_imgs and allow_image_follow_up:
+                follow_up_delta_text = ""
+                follow_up_done_text = ""
+                for follow_chunk in self.stream_response(
+                    agent_id=agent_id,
+                    foundry_agent_id=foundry_agent.id,
+                    thread_id=thread_id,
+                    model=model,
+                    content=IMAGE_FOLLOW_UP_PROMPT,
+                    agent_name=agent_name,
+                    tools=tools,
+                    provider=provider,
+                    images=generated_imgs,
+                    allow_image_follow_up=False,
+                ):
+                    try:
+                        follow_event = json.loads(follow_chunk)
+                    except Exception:
+                        yield follow_chunk
+                        continue
+
+                    follow_type = follow_event.get("type")
+                    if follow_type == "delta":
+                        text = follow_event.get("content", "")
+                        if text:
+                            follow_up_delta_text += text
+                            full_response += text
+                        yield follow_chunk
+                    elif follow_type == "done":
+                        follow_up_done_text = follow_event.get("content", "") or ""
+                    else:
+                        yield follow_chunk
+
+                if follow_up_done_text and not follow_up_delta_text:
+                    full_response += follow_up_done_text
+
+                yield json.dumps({"type": "done", "content": full_response})
+                return
+
             # Retrieve post-tool-call response
             if round_count > 0 and run and getattr(run, "status", None) == "completed":
                 try:
@@ -1501,6 +1651,8 @@ class AgentService:
         except Exception as e:
             logger.error("stream_response error: %s", e, exc_info=True)
             yield json.dumps({"type": "error", "content": str(e)})
+        finally:
+            self._delete_uploaded_files(uploaded_file_ids)
 
     # ── Auto-naming ───────────────────────────────────────────────
 
@@ -1666,6 +1818,8 @@ class AgentService:
         content: str,
         tools: list[str] | None = None,
         provider: str | None = None,
+        images: list[dict] | None = None,
+        allow_image_follow_up: bool = True,
     ) -> str:
         """Send a message and collect the full response synchronously."""
         provider = (provider or self.provider or "azure_foundry").strip().lower()
@@ -1681,6 +1835,8 @@ class AgentService:
                 content=content,
                 tools=tools,
                 provider=provider,
+                images=images,
+                allow_image_follow_up=allow_image_follow_up,
             ):
                 try:
                     data = json.loads(chunk_json)
@@ -1694,6 +1850,8 @@ class AgentService:
 
         if not self.client:
             return ""
+
+        uploaded_file_ids: list[str] = []
 
         try:
             foundry_agent = self.ensure_foundry_agent(
@@ -1710,10 +1868,17 @@ class AgentService:
             # Wait for / cancel any active runs before creating our own
             self._wait_for_active_runs(thread_id, timeout=60, cancel_after=30)
 
-            self.client.messages.create(
+            if images is None:
+                pop_tool_images(thread_id)
+            else:
+                cached_imgs = pop_tool_images(thread_id)
+                if cached_imgs:
+                    images = [*images, *cached_imgs]
+
+            uploaded_file_ids = self._post_user_message(
                 thread_id=thread_id,
-                role="user",
                 content=content,
+                images=images,
             )
 
             run = self.client.runs.create(
@@ -1851,6 +2016,20 @@ class AgentService:
                     pass
                 return fallback
 
+            generated_imgs = pop_tool_images(thread_id)
+            if generated_imgs and allow_image_follow_up:
+                return self.run_non_streaming(
+                    agent_id=agent_id,
+                    foundry_agent_id=foundry_agent.id,
+                    thread_id=thread_id,
+                    model=model,
+                    content=IMAGE_FOLLOW_UP_PROMPT,
+                    tools=tools,
+                    provider=provider,
+                    images=generated_imgs,
+                    allow_image_follow_up=False,
+                )
+
             messages = self.client.messages.list(
                 thread_id=thread_id,
                 order=ListSortOrder.DESCENDING,
@@ -1863,6 +2042,8 @@ class AgentService:
         except Exception as e:
             logger.error("run_non_streaming error: %s", e, exc_info=True)
             return ""
+        finally:
+            self._delete_uploaded_files(uploaded_file_ids)
 
     # ── Cleanup ──────────────────────────────────────────────────
 

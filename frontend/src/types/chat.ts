@@ -66,7 +66,7 @@ export interface Message {
 }
 
 export interface SSEEvent {
-  type: "delta" | "done" | "error" | "trigger_update" | "tool_call" | "tool_result" | "name_update";
+  type: "delta" | "done" | "error" | "trigger_update" | "tool_call" | "tool_result" | "name_update" | "image";
   content: string;
   data?: unknown;
 }

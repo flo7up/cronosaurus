@@ -22,6 +22,7 @@ interface ChatViewProps {
   streamingContent: string;
   streamingToolSteps: ToolStep[];
   streamingTodos: TodoItem[];
+  streamingImages: Array<{ data: string; media_type: string }>;
   isStreaming: boolean;
   onSend: (content: string, images?: Array<{ data: string; media_type: string }>) => void;
   onStop: () => void;
@@ -50,6 +51,7 @@ export default function ChatView({
   streamingContent,
   streamingToolSteps,
   streamingTodos,
+  streamingImages,
   isStreaming,
   onSend,
   onStop,
@@ -449,7 +451,7 @@ export default function ChatView({
           })()}
 
           {/* Streaming tool steps + assistant message */}
-          {isStreaming && (streamingToolSteps.length > 0 || streamingContent || streamingTodos.length > 0) && (
+          {isStreaming && (streamingToolSteps.length > 0 || streamingContent || streamingTodos.length > 0 || streamingImages.length > 0) && (
             <div className="flex gap-3">
               <div className="w-7 h-7 shrink-0 mt-1">
                 <BotIcon />
@@ -462,6 +464,18 @@ export default function ChatView({
                 )}
                 {streamingTodos.length > 0 && (
                   <TodoListDisplay todos={streamingTodos} />
+                )}
+                {streamingImages.length > 0 && (
+                  <div className="flex gap-2 flex-wrap mb-2 max-w-[80%]">
+                    {streamingImages.map((img, i) => (
+                      <img
+                        key={i}
+                        src={`data:${img.media_type};base64,${img.data}`}
+                        alt={`Captured ${i + 1}`}
+                        className="max-h-64 max-w-full rounded border border-[#97ff8a]/20 object-contain"
+                      />
+                    ))}
+                  </div>
                 )}
                 {streamingContent && (
                   <div className="terminal-bubble mt-1 max-w-[80%] px-4 py-3 text-sm leading-relaxed text-[#e0f5d0]">
@@ -1244,6 +1258,18 @@ function MessageBubble({
         })()}
         <div className="max-w-[80%]">
           <div className="terminal-label mb-2 text-[#97ff8a]">cronosaurus@agent $</div>
+          {message.images && message.images.length > 0 && (
+            <div className="flex gap-2 flex-wrap mb-2">
+              {message.images.map((img, i) => (
+                <img
+                  key={i}
+                  src={`data:${img.media_type};base64,${img.data}`}
+                  alt={`Captured ${i + 1}`}
+                  className="max-h-64 max-w-full rounded border border-[#97ff8a]/20 object-contain"
+                />
+              ))}
+            </div>
+          )}
           <div className="terminal-bubble mt-1 px-4 py-3 text-sm leading-relaxed text-[#e0f5d0]">
           <div className="whitespace-pre-wrap break-words" style={{lineHeight: '1.7'}}>
             {message.content}

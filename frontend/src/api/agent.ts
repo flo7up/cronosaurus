@@ -93,7 +93,8 @@ export async function sendMessageStream(
   onToolCall?: (step: ToolStep) => void,
   onToolResult?: (name: string, result: Record<string, unknown>) => void,
   onNameUpdate?: (name: string) => void,
-  images?: Array<{ data: string; media_type: string }>
+  images?: Array<{ data: string; media_type: string }>,
+  onImage?: (img: { data: string; media_type: string }) => void
 ): Promise<void> {
   const body: Record<string, unknown> = { content };
   if (images && images.length > 0) {
@@ -161,6 +162,11 @@ export async function sendMessageStream(
                 result: Record<string, unknown>;
               };
               onToolResult?.(trData.name, trData.result ?? {});
+              break;
+            }
+            case "image": {
+              const imgData = event.data as { data: string; media_type: string };
+              if (imgData?.data) onImage?.(imgData);
               break;
             }
           }

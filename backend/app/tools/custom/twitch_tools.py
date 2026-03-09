@@ -53,11 +53,11 @@ TOOL_DEFINITIONS: list[dict] = [
                 },
                 "width": {
                     "type": "integer",
-                    "description": "Image width in pixels. Default 1920. Max 1920.",
+                    "description": "Image width in pixels. Default 854. Max 1280.",
                 },
                 "height": {
                     "type": "integer",
-                    "description": "Image height in pixels. Default 1080. Max 1080.",
+                    "description": "Image height in pixels. Default 480. Max 720.",
                 },
             },
             "required": ["channel"],
@@ -179,8 +179,8 @@ def execute_tool(tool_name: str, arguments: str | dict, **kwargs) -> dict[str, A
             return {"success": False, "error": "Channel name or URL is required."}
 
         username = _extract_username(channel)
-        width = min(arguments.get("width", 1920), 1920)
-        height = min(arguments.get("height", 1080), 1080)
+        width = min(arguments.get("width", 854), 1280)
+        height = min(arguments.get("height", 480), 720)
 
         logger.info("Capturing Twitch stream: %s (%dx%d)", username, width, height)
 
