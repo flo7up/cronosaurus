@@ -27,6 +27,7 @@ export interface Agent {
   model: string;
   tools: string[];
   email_account_id: string | null;
+  custom_instructions: string;
   thread_id: string;
   foundry_agent_id: string;
   trigger: AgentTrigger | null;

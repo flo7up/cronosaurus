@@ -197,7 +197,7 @@ function App() {
       });
     };
     poll(); // check immediately
-    const iv = setInterval(poll, 5_000);
+    const iv = setInterval(poll, 15_000);
     return () => { cancelled = true; clearInterval(iv); };
   }, [activeId, activeAgent?.trigger?.active]);
 
@@ -536,6 +536,24 @@ function App() {
     [activeId, refreshAgent]
   );
 
+  const handleCustomInstructionsChange = useCallback(
+    async (instructions: string) => {
+      if (!activeId) return;
+      setAgents((prev) =>
+        prev.map((a) => (a.id === activeId ? { ...a, custom_instructions: instructions } : a))
+      );
+      try {
+        const updated = await updateAgent(activeId, { custom_instructions: instructions });
+        setAgents((prev) =>
+          prev.map((a) => (a.id === updated.id ? updated : a))
+        );
+      } catch {
+        refreshAgent(activeId);
+      }
+    },
+    [activeId, refreshAgent]
+  );
+
   // --- MCP server handlers ---
   const handleAddMCP = useCallback(async (server: Omit<MCPServer, "id">) => {
     try {
@@ -747,6 +765,7 @@ function App() {
         onEmailAccountChange={handleEmailAccountChange}
         onNewAgentWithPrompt={handleNewAgentWithPrompt}
         toolCatalog={toolCatalog}
+        onCustomInstructionsChange={handleCustomInstructionsChange}
       />
       {showManagement && (
         <ManagementPanel

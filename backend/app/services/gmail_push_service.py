@@ -254,6 +254,7 @@ class GmailPushService:
                     content=email_context,
                     tools=agent_tools,
                     provider=provider,
+                    custom_instructions=agent_doc.get("custom_instructions", ""),
                 )
                 processed_count += 1
                 logger.info(

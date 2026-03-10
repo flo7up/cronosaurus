@@ -49,6 +49,7 @@ def _agent_to_response(doc: dict) -> AgentResponse:
         model=doc["model"],
         tools=doc.get("tools", []),
         email_account_id=doc.get("email_account_id"),
+        custom_instructions=doc.get("custom_instructions", ""),
         thread_id=doc.get("thread_id", ""),
         foundry_agent_id=doc.get("foundry_agent_id", ""),
         trigger=trigger_resp,
@@ -94,7 +95,7 @@ def create_agent(body: AgentCreate = AgentCreate()):
         # Create Foundry agent + thread in parallel
         try:
             with ThreadPoolExecutor(max_workers=2) as pool:
-                agent_future = pool.submit(agent_service.create_foundry_agent, body.model, body.tools)
+                agent_future = pool.submit(agent_service.create_foundry_agent, body.model, body.tools, body.custom_instructions)
                 thread_future = pool.submit(agent_service.create_foundry_thread)
                 foundry_agent = agent_future.result()
                 thread_id = thread_future.result()
@@ -112,6 +113,7 @@ def create_agent(body: AgentCreate = AgentCreate()):
         name=body.name,
         model=body.model,
         tools=body.tools,
+        custom_instructions=body.custom_instructions,
         thread_id=thread_id,
         provider=provider,
         foundry_agent_id=foundry_agent_id,
@@ -144,21 +146,24 @@ def update_agent(agent_id: str, body: AgentUpdate):
     # If model changed, we need to recreate the Foundry agent (different deployment)
     model_changed = "model" in updates and updates["model"] != doc["model"]
     tools_changed = "tools" in updates and set(updates["tools"]) != set(doc.get("tools", []))
+    instructions_changed = "custom_instructions" in updates and updates["custom_instructions"] != doc.get("custom_instructions", "")
 
     if doc_provider == "azure_foundry":
         if model_changed:
             new_model = updates.get("model", doc["model"])
             new_tools = updates.get("tools", doc.get("tools", []))
+            new_custom = updates.get("custom_instructions", doc.get("custom_instructions", ""))
             try:
                 if doc.get("foundry_agent_id"):
                     agent_service.delete_foundry_agent(doc["foundry_agent_id"])
-                foundry_agent = agent_service.create_foundry_agent(new_model, new_tools)
+                foundry_agent = agent_service.create_foundry_agent(new_model, new_tools, custom_instructions=new_custom)
                 updates["foundry_agent_id"] = foundry_agent.id
             except Exception as e:
                 logger.error("Failed to recreate Foundry agent: %s", e)
                 raise HTTPException(500, f"Failed to update agent: {e}")
-        elif tools_changed:
-            new_tools = updates["tools"]
+        elif tools_changed or instructions_changed:
+            new_tools = updates.get("tools", doc.get("tools", []))
+            new_custom = updates.get("custom_instructions", doc.get("custom_instructions", ""))
             foundry_agent_id = doc.get("foundry_agent_id", "")
             if foundry_agent_id:
                 try:
@@ -167,9 +172,10 @@ def update_agent(agent_id: str, body: AgentUpdate):
                         foundry_agent_id=foundry_agent_id,
                         model=doc["model"],
                         tools=new_tools,
+                        custom_instructions=new_custom,
                     )
                 except Exception as e:
-                    logger.warning("Failed to update Foundry agent tools in place: %s", e)
+                    logger.warning("Failed to update Foundry agent in place: %s", e)
 
     doc = agent_store.update_agent(agent_id, updates)
     if not doc:
@@ -232,6 +238,53 @@ def get_messages(agent_id: str):
     return [MessageResponse(**m) for m in messages]
 
 
+@router.get("/{agent_id}/token-count")
+def get_token_count(agent_id: str):
+    """Return approximate token usage for the agent's conversation."""
+    _require_ready()
+    doc = agent_store.get_agent(agent_id)
+    if not doc:
+        raise HTTPException(404, "Agent not found")
+    if not doc.get("thread_id"):
+        return {"token_count": 0, "context_limit": 0}
+
+    model = doc.get("model", "gpt-4.1-mini")
+
+    # Context window limits by model family
+    context_limits = {
+        "gpt-4.1": 1_048_576,
+        "gpt-4.1-mini": 1_048_576,
+        "gpt-4.1-nano": 1_048_576,
+        "gpt-5-mini": 1_048_576,
+        "gpt-5-chat": 1_048_576,
+        "gpt-5-nano": 1_048_576,
+        "model-router": 1_048_576,
+    }
+    context_limit = context_limits.get(model, 128_000)
+
+    try:
+        import tiktoken
+        try:
+            enc = tiktoken.encoding_for_model(model)
+        except KeyError:
+            enc = tiktoken.get_encoding("o200k_base")
+
+        doc_provider = (doc.get("provider") or agent_service.provider or "azure_foundry").strip().lower()
+        messages = agent_service.get_messages(doc["thread_id"], provider=doc_provider)
+
+        token_count = 0
+        for msg in messages:
+            token_count += 4  # ~4 tokens overhead per message
+            content = msg.get("content") or ""
+            if content:
+                token_count += len(enc.encode(content))
+    except Exception as e:
+        logger.warning("Token count failed for agent %s: %s", agent_id, e)
+        return {"token_count": 0, "context_limit": context_limit}
+
+    return {"token_count": token_count, "context_limit": context_limit}
+
+
 @router.post("/{agent_id}/messages")
 def send_message(agent_id: str, body: SendAgentMessageRequest):
     """Send a user message and stream the agent response as SSE."""
@@ -266,6 +319,7 @@ def send_message(agent_id: str, body: SendAgentMessageRequest):
             tools=doc.get("tools", []),
             provider=doc_provider,
             images=image_data_uris if image_data_uris else None,
+            custom_instructions=doc.get("custom_instructions", ""),
         ):
             yield f"data: {chunk}\n\n"
 

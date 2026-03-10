@@ -11,6 +11,7 @@ export interface NotificationData {
   agent_name?: string;
   read: boolean;
   created_at: string;
+  images?: Array<{ data: string; media_type: string }>;
 }
 
 export async function fetchNotifications(

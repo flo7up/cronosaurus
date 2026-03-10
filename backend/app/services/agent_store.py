@@ -97,6 +97,7 @@ class AgentStore:
         provider: str = "azure_foundry",
         foundry_agent_id: str = "",
         user_id: str = DEFAULT_USER_ID,
+        custom_instructions: str = "",
     ) -> dict:
         """Create a new agent document."""
         now = datetime.now(timezone.utc).isoformat()
@@ -106,6 +107,7 @@ class AgentStore:
             "name": name,
             "model": model,
             "tools": tools,
+            "custom_instructions": custom_instructions,
             "thread_id": thread_id,
             "provider": provider,
             "foundry_agent_id": foundry_agent_id,

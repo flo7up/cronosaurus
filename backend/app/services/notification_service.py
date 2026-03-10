@@ -86,6 +86,7 @@ class NotificationService:
         agent_id: str | None = None,
         agent_name: str | None = None,
         user_id: str = DEFAULT_USER_ID,
+        images: list[dict] | None = None,
     ) -> dict:
         """Create a new notification and store it in Cosmos."""
         if not self._initialized:
@@ -103,6 +104,8 @@ class NotificationService:
             "read": False,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
+        if images:
+            doc["images"] = images
         self._container.create_item(body=doc)
         logger.info("Created notification %s: %s", doc["id"], title)
         return doc

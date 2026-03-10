@@ -11,3 +11,4 @@ duckduckgo-search~=7.0.0
 agent-framework-core>=1.0.0rc2
 agent-framework-anthropic>=1.0.0b260304
 azure-ai-agents
+tiktoken>=0.7.0

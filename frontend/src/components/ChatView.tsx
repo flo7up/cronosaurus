@@ -43,6 +43,7 @@ interface ChatViewProps {
   onEmailAccountChange: (accountId: string | null) => void;
   onNewAgentWithPrompt: (prompt: string) => void;
   toolCatalog: ToolCatalogEntry[];
+  onCustomInstructionsChange: (instructions: string) => void;
 }
 
 export default function ChatView({
@@ -72,10 +73,14 @@ export default function ChatView({
   onEmailAccountChange,
   onNewAgentWithPrompt,
   toolCatalog,
+  onCustomInstructionsChange,
 }: ChatViewProps) {
   const [input, setInput] = useState("");
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [attachedImages, setAttachedImages] = useState<Array<{ data: string; media_type: string; preview: string }>>([]);
+  const [showInstructionsDialog, setShowInstructionsDialog] = useState(false);
+  const [instructionsDraft, setInstructionsDraft] = useState("");
+  const [lightboxImage, setLightboxImage] = useState<{ src: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,6 +104,26 @@ export default function ChatView({
       textareaRef.current?.focus();
     }
   }, [isStreaming]);
+
+  // Estimate token count locally (avoids server round-trip)
+  const tokenInfo = useMemo(() => {
+    if (!activeAgent) return null;
+    const model = activeAgent.model || "gpt-4.1-mini";
+    // Approximate: ~0.75 tokens per character for English text
+    let count = 0;
+    for (const msg of messages) {
+      count += 4; // per-message overhead
+      if (msg.content) count += Math.ceil(msg.content.length / 4);
+    }
+    // Context limits by model
+    const limits: Record<string, number> = {
+      "gpt-4.1": 1_048_576, "gpt-4.1-mini": 1_048_576, "gpt-4.1-nano": 1_048_576,
+      "gpt-5-mini": 1_048_576, "gpt-5-chat": 1_048_576, "gpt-5-nano": 1_048_576,
+      "model-router": 1_048_576,
+    };
+    const limit = limits[model] ?? 128_000;
+    return { count, limit };
+  }, [activeAgent?.model, messages]);
 
   // Auto-focus textarea when switching to / creating an agent
   useEffect(() => {
@@ -352,6 +377,25 @@ export default function ChatView({
             toolCatalog={toolCatalog}
           />
         )}
+        {/* Agent instructions button */}
+        <Tooltip text="Agent instructions">
+          <button
+            onClick={() => {
+              setInstructionsDraft(activeAgent.custom_instructions || "");
+              setShowInstructionsDialog(true);
+            }}
+            className={`terminal-control p-1.5 transition-colors ${
+              activeAgent.custom_instructions
+                ? "text-[#97ff8a] bg-[#121a0f] hover:bg-[#1a2515]"
+                : "text-[#8b7f59] hover:text-[#dcca8a] hover:bg-[#18130d]"
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+        </Tooltip>
         {/* Trigger button */}
         <button
           onClick={() => onOpenManagement("triggers")}
@@ -418,7 +462,7 @@ export default function ChatView({
             </div>
           )}
           {messages.map((msg, i) => (
-            <MessageBubble key={i} message={msg} />
+            <MessageBubble key={i} message={msg} onImageClick={(src) => setLightboxImage({ src })} />
           ))}
 
           {/* Confirmation buttons — shown when the last assistant message used request_confirmation */}
@@ -467,14 +511,18 @@ export default function ChatView({
                 )}
                 {streamingImages.length > 0 && (
                   <div className="flex gap-2 flex-wrap mb-2 max-w-[80%]">
-                    {streamingImages.map((img, i) => (
-                      <img
-                        key={i}
-                        src={`data:${img.media_type};base64,${img.data}`}
-                        alt={`Captured ${i + 1}`}
-                        className="max-h-64 max-w-full rounded border border-[#97ff8a]/20 object-contain"
-                      />
-                    ))}
+                    {streamingImages.map((img, i) => {
+                      const src = `data:${img.media_type};base64,${img.data}`;
+                      return (
+                        <img
+                          key={i}
+                          src={src}
+                          alt={`Captured ${i + 1}`}
+                          className="max-h-64 max-w-full rounded border border-[#97ff8a]/20 object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => setLightboxImage({ src })}
+                        />
+                      );
+                    })}
                   </div>
                 )}
                 {streamingContent && (
@@ -619,11 +667,104 @@ export default function ChatView({
             )}
             </div>
           </div>
-          <p className="text-xs text-[#786d48] text-center mt-2 uppercase tracking-[0.16em]">
-            session target: microsoft foundry agent service
+          <p className="text-xs text-[#786d48] text-center mt-2 uppercase tracking-[0.16em] flex items-center justify-center gap-3">
+            <span>session target: microsoft foundry agent service</span>
+            {tokenInfo && tokenInfo.limit > 0 && (
+              <span className="inline-flex items-center gap-1.5 normal-case tracking-normal">
+                <span
+                  className="inline-block w-1.5 h-1.5 rounded-full"
+                  style={{
+                    backgroundColor:
+                      tokenInfo.count / tokenInfo.limit > 0.9
+                        ? "#ef4444"
+                        : tokenInfo.count / tokenInfo.limit > 0.7
+                          ? "#f59e0b"
+                          : "#97ff8a",
+                  }}
+                />
+                {tokenInfo.count >= 1000
+                  ? `${(tokenInfo.count / 1000).toFixed(1)}k`
+                  : tokenInfo.count}
+                {" / "}
+                {tokenInfo.limit >= 1_000_000
+                  ? `${(tokenInfo.limit / 1_000_000).toFixed(0)}M`
+                  : tokenInfo.limit >= 1000
+                    ? `${(tokenInfo.limit / 1000).toFixed(0)}k`
+                    : tokenInfo.limit}
+                {" tokens"}
+              </span>
+            )}
           </p>
         </div>
       </div>
+
+      {/* Instructions dialog */}
+      {showInstructionsDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowInstructionsDialog(false); }}>
+          <div className="terminal-panel mx-4 resize overflow-auto" style={{ width: 540, minWidth: 320, minHeight: 280, maxWidth: '90vw', maxHeight: '90vh' }}>
+            <div className="terminal-titlebar flex items-center justify-between">
+              <span>agent instructions</span>
+              <button onClick={() => setShowInstructionsDialog(false)} className="text-[#8b7f59] hover:text-[#dcca8a] transition-colors">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-xs text-[#8b7f59]">
+                Custom instructions that shape how this agent behaves. These are prepended to the system prompt.
+              </p>
+              <textarea
+                value={instructionsDraft}
+                onChange={(e) => setInstructionsDraft(e.target.value)}
+                placeholder="e.g. Always respond in Spanish. Be concise and use bullet points."
+                className="w-full bg-[#0d0b08] border border-[#3d3520] rounded px-3 py-2 text-sm text-[#f6efc9] placeholder-[#5f4c1d] resize-y focus:outline-none focus:border-[#6a5421]"
+                style={{ minHeight: 120, height: 200 }}
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowInstructionsDialog(false)}
+                  className="terminal-control px-3 py-1.5 text-xs text-[#8b7f59] hover:text-[#dcca8a]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    onCustomInstructionsChange(instructionsDraft);
+                    setShowInstructionsDialog(false);
+                  }}
+                  className="brand-button-primary px-4 py-1.5 text-xs font-medium"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image lightbox */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 cursor-zoom-out"
+          onClick={() => setLightboxImage(null)}
+        >
+          <img
+            src={lightboxImage.src}
+            alt="Full size"
+            className="max-w-[95vw] max-h-[95vh] object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setLightboxImage(null)}
+            className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
+          >
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -945,6 +1086,7 @@ function ToolsDropdown({
 
   return (
     <>
+      <div className="relative">
       <button
         ref={buttonRef}
         onClick={() => setOpen(!open)}
@@ -969,6 +1111,7 @@ function ToolsDropdown({
           </span>
         ) : null;
       })()}
+      </div>
 
       {/* Slide-in panel — covers the left side of the chat area */}
       {open && (
@@ -1186,9 +1329,11 @@ function UserIcon() {
 function MessageBubble({
   message,
   isStreaming = false,
+  onImageClick,
 }: {
   message: Message;
   isStreaming?: boolean;
+  onImageClick?: (src: string) => void;
 }) {
   const isUser = message.role === "user";
   const tooltip = message.created_at
@@ -1203,14 +1348,18 @@ function MessageBubble({
           <div className="terminal-bubble-user px-4 py-3 text-sm leading-relaxed text-[#fff5cf]">
           {message.images && message.images.length > 0 && (
             <div className="flex gap-2 flex-wrap mb-2">
-              {message.images.map((img, i) => (
-                <img
-                  key={i}
-                  src={`data:${img.media_type};base64,${img.data}`}
-                  alt={`Attachment ${i + 1}`}
-                  className="max-h-48 max-w-full border border-[#f2c230]/20 object-contain"
-                />
-              ))}
+              {message.images.map((img, i) => {
+                const src = `data:${img.media_type};base64,${img.data}`;
+                return (
+                  <img
+                    key={i}
+                    src={src}
+                    alt={`Attachment ${i + 1}`}
+                    className="max-h-48 max-w-full border border-[#f2c230]/20 object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => onImageClick?.(src)}
+                  />
+                );
+              })}
             </div>
           )}
           <div className="whitespace-pre-wrap break-words" style={{lineHeight: '1.7'}}>{message.content}</div>
@@ -1260,14 +1409,18 @@ function MessageBubble({
           <div className="terminal-label mb-2 text-[#97ff8a]">cronosaurus@agent $</div>
           {message.images && message.images.length > 0 && (
             <div className="flex gap-2 flex-wrap mb-2">
-              {message.images.map((img, i) => (
-                <img
-                  key={i}
-                  src={`data:${img.media_type};base64,${img.data}`}
-                  alt={`Captured ${i + 1}`}
-                  className="max-h-64 max-w-full rounded border border-[#97ff8a]/20 object-contain"
-                />
-              ))}
+              {message.images.map((img, i) => {
+                const src = `data:${img.media_type};base64,${img.data}`;
+                return (
+                  <img
+                    key={i}
+                    src={src}
+                    alt={`Captured ${i + 1}`}
+                    className="max-h-64 max-w-full rounded border border-[#97ff8a]/20 object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => onImageClick?.(src)}
+                  />
+                );
+              })}
             </div>
           )}
           <div className="terminal-bubble mt-1 px-4 py-3 text-sm leading-relaxed text-[#e0f5d0]">

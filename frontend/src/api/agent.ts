@@ -47,7 +47,7 @@ export async function getAgent(agentId: string): Promise<Agent> {
 
 export async function updateAgent(
   agentId: string,
-  data: Partial<{ name: string; model: string; tools: string[]; email_account_id: string | null }>
+  data: Partial<{ name: string; model: string; tools: string[]; email_account_id: string | null; custom_instructions: string }>
 ): Promise<Agent> {
   const res = await fetch(`${BASE}/${agentId}`, {
     method: "PATCH",
@@ -60,6 +60,14 @@ export async function updateAgent(
 
 export async function deleteAgent(agentId: string): Promise<void> {
   await fetch(`${BASE}/${agentId}`, { method: "DELETE" });
+}
+
+// ── Token count ───────────────────────────────────────────────
+
+export async function fetchTokenCount(agentId: string): Promise<{ token_count: number; context_limit: number }> {
+  const res = await fetch(`${BASE}/${agentId}/token-count`);
+  if (!res.ok) return { token_count: 0, context_limit: 0 };
+  return res.json();
 }
 
 // ── Messages ──────────────────────────────────────────────────
@@ -77,6 +85,9 @@ export async function fetchMessages(agentId: string): Promise<Message[]> {
     };
     if (m.tool_steps && Array.isArray(m.tool_steps) && m.tool_steps.length > 0) {
       msg.toolSteps = m.tool_steps as ToolStep[];
+    }
+    if (m.images && Array.isArray(m.images) && m.images.length > 0) {
+      msg.images = m.images as Array<{ data: string; media_type: string }>;
     }
     return msg;
   });

@@ -502,6 +502,19 @@ export default function NotificationPanel({
                             </p>
                           </div>
                         )}
+                        {/* Notification images */}
+                        {n.images && n.images.length > 0 && (
+                          <div className="flex gap-2 flex-wrap mt-2">
+                            {n.images.map((img, i) => (
+                              <img
+                                key={i}
+                                src={`data:${img.media_type};base64,${img.data}`}
+                                alt={`Notification image ${i + 1}`}
+                                className="max-h-40 max-w-full rounded-lg border border-[#f2c230]/15 object-contain"
+                              />
+                            ))}
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 mt-1.5">
                           {n.agent_name && (
                             <span className="terminal-chip text-[10px] px-1.5 py-0.5">

@@ -130,6 +130,7 @@ class TriggerScheduler:
             content=prefixed_prompt,
             tools=agent_doc.get("tools", []),
             provider=provider,
+            custom_instructions=agent_doc.get("custom_instructions", ""),
         )
 
         # Update trigger metadata in Cosmos

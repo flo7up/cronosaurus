@@ -21,8 +21,8 @@ from app.services.message_store import message_store
 logger = logging.getLogger(__name__)
 
 
-def _store_message(thread_id: str, role: str, content: str):
-    message_store.store_message(thread_id, role, content)
+def _store_message(thread_id: str, role: str, content: str, images: list[dict] | None = None):
+    message_store.store_message(thread_id, role, content, images=images)
 
 
 def get_messages(thread_id: str) -> list[dict]:
@@ -66,7 +66,9 @@ def _create_af_tool_wrapper(
 
         # Strip large image data before returning to the model
         from app.services.agent_service import strip_image_from_result
-        strip_image_from_result(result, thread_id_ref[0])
+        img_dict = strip_image_from_result(result, thread_id_ref[0])
+        if img_dict:
+            event_queue.put(json.dumps({"type": "image", "content": "", "data": img_dict}))
 
         return json.dumps(result)
 
@@ -137,7 +139,9 @@ def stream_response(
         except Exception as e:
             logger.warning("Failed to create AF tool wrapper for %s: %s", td["name"], e)
 
-    _store_message(thread_id, "user", content)
+    # Store user message (with images if any)
+    user_images = [{"data": img["data"], "media_type": img["media_type"]} for img in images] if images else None
+    _store_message(thread_id, "user", content, images=user_images)
 
     # Merge any cached tool images (e.g. from a previous Twitch capture)
     from app.services.agent_service import pop_tool_images
@@ -216,7 +220,10 @@ def stream_response(
     if error_msg:
         yield json.dumps({"type": "error", "content": f"Anthropic error: {error_msg}"})
 
+    # Store assistant response (with any tool-generated images)
     if full_response:
-        _store_message(thread_id, "assistant", full_response)
+        from app.services.agent_service import pop_tool_images
+        assistant_images = pop_tool_images(thread_id) or None
+        _store_message(thread_id, "assistant", full_response, images=assistant_images)
 
     yield json.dumps({"type": "done", "content": full_response})

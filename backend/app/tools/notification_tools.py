@@ -63,6 +63,21 @@ NOTIFICATION_TOOL_DEFINITIONS = [
                         "Defaults to info."
                     ),
                 },
+                "image_base64": {
+                    "type": "string",
+                    "description": (
+                        "Base64-encoded image data to include with the notification. "
+                        "Used when you want to attach a captured image (e.g. from "
+                        "a Twitch stream capture) to the notification and email."
+                    ),
+                },
+                "image_media_type": {
+                    "type": "string",
+                    "description": (
+                        "MIME type of the image, e.g. 'image/jpeg' or 'image/png'. "
+                        "Defaults to 'image/jpeg'."
+                    ),
+                },
             },
             "required": ["title", "body"],
         },
@@ -78,6 +93,7 @@ def execute_notification_tool(
     agent_id: str | None = None,
     agent_name: str | None = None,
     user_id: str = "1",
+    thread_id: str | None = None,
 ) -> dict[str, Any]:
     """Execute a notification tool call."""
     if isinstance(arguments, str):
@@ -93,6 +109,22 @@ def execute_notification_tool(
     body = arguments.get("body", "")
     content = arguments.get("content", "")
     level = arguments.get("level", "info")
+    image_base64 = arguments.get("image_base64", "")
+    image_media_type = arguments.get("image_media_type", "image/jpeg")
+
+    # If no explicit image param, try the thread image cache
+    if not image_base64 and thread_id:
+        from app.services.agent_service import _thread_images, _thread_images_lock
+        with _thread_images_lock:
+            cached = _thread_images.get(thread_id, [])
+            if cached:
+                image_base64 = cached[-1]["data"]
+                image_media_type = cached[-1].get("media_type", "image/jpeg")
+
+    # Build images list for storage/delivery
+    images: list[dict] | None = None
+    if image_base64:
+        images = [{"data": image_base64, "media_type": image_media_type}]
 
     if not title or not body:
         return {"success": False, "error": "title and body are required"}
@@ -110,6 +142,7 @@ def execute_notification_tool(
             agent_id=agent_id,
             agent_name=agent_name,
             user_id=user_id,
+            images=images,
         )
 
         # Deliver to all enabled channels
@@ -124,6 +157,7 @@ def execute_notification_tool(
                     content=content,
                     level=level,
                     agent_name=agent_name,
+                    images=images,
                 )
                 if ok:
                     channels_sent += 1
@@ -149,6 +183,7 @@ def _send_to_email_channel(
     level: str = "info",
     agent_name: str | None = None,
     user_id: str = "1",
+    images: list[dict] | None = None,
 ) -> bool:
     """Send a notification email to a specific email channel address."""
     try:
@@ -176,6 +211,16 @@ def _send_to_email_channel(
         # Use content for the detailed section, fall back to body
         detail_text = content or body
 
+        # Build image HTML section (inline CID references)
+        image_html = ""
+        if images:
+            for i, _img in enumerate(images):
+                image_html += (
+                    f'<div style="margin-top: 16px;">'
+                    f'<img src="cid:notif_img_{i}" style="max-width: 100%; border-radius: 8px; border: 1px solid #333;" />'
+                    f'</div>'
+                )
+
         html_body = f"""
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; color: #e0e0e0;">
@@ -191,6 +236,7 @@ def _send_to_email_channel(
                 <div style="border-top: 1px solid #333; padding-top: 16px; line-height: 1.7; color: #ccc; white-space: pre-wrap; font-size: 14px;">
                     {detail_text}
                 </div>
+                {image_html}
             </div>
         </div>
         """
@@ -208,6 +254,7 @@ def _send_to_email_channel(
             subject=subject,
             body=html_body,
             is_html=True,
+            images=images,
         )
         return result.get("success", False)
 

@@ -11,6 +11,7 @@ class AgentCreate(BaseModel):
     model: str = "gpt-4.1-mini"
     tools: list[str] = Field(default_factory=lambda: ["crypto", "stock", "email_send", "email_read", "triggers", "notifications", "tool_management"])
     email_account_id: Optional[str] = None
+    custom_instructions: str = ""
 
 
 class AgentUpdate(BaseModel):
@@ -18,6 +19,7 @@ class AgentUpdate(BaseModel):
     model: Optional[str] = None
     tools: Optional[list[str]] = None
     email_account_id: Optional[str] = None
+    custom_instructions: Optional[str] = None
 
 
 class AgentTriggerCreate(BaseModel):
@@ -85,6 +87,7 @@ class AgentResponse(BaseModel):
     model: str
     tools: list[str]
     email_account_id: Optional[str] = None
+    custom_instructions: str = ""
     thread_id: str
     foundry_agent_id: str = ""
     trigger: Optional[AgentTriggerResponse] = None

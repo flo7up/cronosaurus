@@ -47,18 +47,24 @@ class MessageStore:
     def is_ready(self) -> bool:
         return self._initialized
 
-    def store_message(self, thread_id: str, role: str, content: str) -> None:
-        """Persist a single message."""
+    def store_message(
+        self, thread_id: str, role: str, content: str,
+        images: list[dict] | None = None,
+    ) -> None:
+        """Persist a single message, optionally with images."""
         if not self._initialized:
             return
         try:
-            self._container.create_item({
+            doc: dict = {
                 "id": str(uuid4()),
                 "thread_id": thread_id,
                 "role": role,
                 "content": content,
                 "ts": datetime.now(timezone.utc).isoformat(),
-            })
+            }
+            if images:
+                doc["images"] = images
+            self._container.create_item(doc)
         except Exception as e:
             logger.warning("Failed to store message for thread %s: %s", thread_id, e)
 
@@ -69,10 +75,10 @@ class MessageStore:
         try:
             items = list(self._container.query_items(
                 query=(
-                    "SELECT c.role, c.content FROM c "
+                    "SELECT c.role, c.content, c.images FROM c "
                     "WHERE c.thread_id = @tid "
                     "AND c.role IN ('user', 'assistant') "
-                    "AND c.content != '' "
+                    "AND (c.content != '' OR IS_DEFINED(c.images)) "
                     "ORDER BY c.ts ASC "
                     "OFFSET 0 LIMIT @limit"
                 ),
@@ -82,7 +88,13 @@ class MessageStore:
                 ],
                 partition_key=thread_id,
             ))
-            return [{"role": m["role"], "content": m["content"]} for m in items]
+            result = []
+            for m in items:
+                entry: dict = {"role": m["role"], "content": m["content"]}
+                if m.get("images"):
+                    entry["images"] = m["images"]
+                result.append(entry)
+            return result
         except Exception as e:
             logger.warning("Failed to read messages for thread %s: %s", thread_id, e)
             return []

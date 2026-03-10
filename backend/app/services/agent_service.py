@@ -334,12 +334,22 @@ you to send an email, compose and send a message, or email someone.
 
 Tool: send_email
 
+Parameters:
+- to: Recipient email address(es), comma-separated for multiple.
+- subject: The email subject line.
+- body: The email body (plain text or HTML).
+- is_html: Set to true if using HTML markup.
+- image_base64: (optional) Base64-encoded image data to embed inline.
+- image_media_type: (optional) MIME type of the image (default: image/jpeg).
+
 Rules:
 - The user must have configured an email account in their settings.
   If send_email fails because no account is configured, tell the user
   to set up their email account in Settings > Tools.
 - When asked to send an email, compose a clear subject and body,
   then call send_email immediately.
+- When you have a captured image to include, pass image_base64 from
+  the capture tool result. The image will be embedded inline.
 - Confirm the result briefly.
 """
 
@@ -423,6 +433,12 @@ Parameters:
   have data, tables, or analysis to share, put it here. If omitted, the
   body text is used.
 - level: info | success | warning | error
+- image_base64: (optional) Base64-encoded image data to include. If you
+  just captured an image (e.g. via capture_twitch_stream), you can pass
+  the image_base64 value from the tool result to embed it in the
+  notification and email. If omitted but a tool-captured image exists in
+  the current conversation, it will be automatically included.
+- image_media_type: (optional) MIME type of the image (default: image/jpeg).
 
 Rules:
 - Always include a meaningful 'content' field when the notification is
@@ -434,6 +450,8 @@ Rules:
   important findings without them having to check the chat.
 - When a trigger task completes, send a notification with the full results
   in the 'content' field so the user receives everything via email.
+- When you have a captured image (e.g. from a stream capture tool), include
+  it in the notification by passing the image_base64 from the capture result.
 """
 
 AZURE_COST_INSTRUCTIONS_SUFFIX = """
@@ -589,7 +607,18 @@ class AgentService:
             self.client = AgentsClient(
                 endpoint=settings.project_endpoint,
                 credential=credential,
+                connection_verify=True,
             )
+            # Increase urllib3 connection pool to avoid pool-full warnings
+            # when polling + triggers + user requests run concurrently.
+            try:
+                import urllib3
+                urllib3.util.connection._DEFAULT_TIMEOUT = 30
+                for adapter in self.client._client._client._pipeline._transport.session.adapters.values():
+                    adapter._pool_connections = 20
+                    adapter._pool_maxsize = 20
+            except Exception:
+                pass  # best-effort — SDK internals may vary
             self._initialized = True
             logger.info("Agent service initialized (endpoint=%s)", settings.project_endpoint)
         except Exception as e:
@@ -698,9 +727,11 @@ class AgentService:
         all_defs.extend(TODO_TOOL_DEFINITIONS)
         return all_defs
 
-    def _build_instructions(self, tool_ids: list[str]) -> str:
+    def _build_instructions(self, tool_ids: list[str], custom_instructions: str = "") -> str:
         """Build agent instructions based on enabled tool categories."""
         instructions = settings.agent_instructions
+        if custom_instructions:
+            instructions += "\n\n--- Custom Instructions ---\n" + custom_instructions
         # Confirmation and todo tools are always available
         instructions += CONFIRMATION_INSTRUCTIONS_SUFFIX
         instructions += TODO_INSTRUCTIONS_SUFFIX
@@ -752,10 +783,10 @@ class AgentService:
 
         return instructions
 
-    def create_foundry_agent(self, model: str, tools: list[str]) -> object:
+    def create_foundry_agent(self, model: str, tools: list[str], custom_instructions: str = "") -> object:
         """Create a Foundry agent with the given model and tools."""
         logger.info("Creating Foundry agent: model=%s tools=%s", model, tools)
-        instructions = self._build_instructions(tools)
+        instructions = self._build_instructions(tools, custom_instructions=custom_instructions)
         tool_defs = self._build_tool_definitions(tools)
         logger.info("Built %d tool definitions for Foundry agent", len(tool_defs))
 
@@ -795,7 +826,7 @@ class AgentService:
             raise
 
     def ensure_foundry_agent(
-        self, *, agent_id: str, foundry_agent_id: str, model: str, tools: list[str]
+        self, *, agent_id: str, foundry_agent_id: str, model: str, tools: list[str], custom_instructions: str = ""
     ) -> object:
         """Get the Foundry agent, recreating or updating it as needed.
 
@@ -804,7 +835,7 @@ class AgentService:
           so MCP and other dynamically-discovered tools stay in sync.
         """
         tool_defs = self._build_tool_definitions(tools)
-        instructions = self._build_instructions(tools)
+        instructions = self._build_instructions(tools, custom_instructions=custom_instructions)
 
         try:
             agent = self.get_foundry_agent(foundry_agent_id)
@@ -844,7 +875,7 @@ class AgentService:
             )
 
         # Recreate
-        new_agent = self.create_foundry_agent(model, tools)
+        new_agent = self.create_foundry_agent(model, tools, custom_instructions=custom_instructions)
         # Persist the new id back to Cosmos
         try:
             from app.services.agent_store import agent_store
@@ -1050,8 +1081,8 @@ class AgentService:
                                     tool_steps.append(ts)
                     return (run.id, tool_steps)
 
-                # Fetch run steps in parallel (up to 8 at a time)
-                with ThreadPoolExecutor(max_workers=min(8, len(runs) or 1)) as pool:
+                # Fetch run steps in parallel (up to 3 at a time)
+                with ThreadPoolExecutor(max_workers=min(3, len(runs) or 1)) as pool:
                     futures = {pool.submit(_fetch_steps, run): run for run in runs}
                     for future in as_completed(futures):
                         try:
@@ -1080,6 +1111,32 @@ class AgentService:
                 if msg.role == "assistant" and run_id and run_id in run_tool_steps:
                     entry["tool_steps"] = run_tool_steps[run_id]
                 result.append(entry)
+
+            # Merge persisted images from Cosmos message store
+            try:
+                from app.services.message_store import message_store
+                stored_msgs = message_store.get_messages(thread_id)
+                # Build lists of image-bearing stored messages by role
+                user_img_msgs = [m for m in stored_msgs if m.get("images") and m["role"] == "user"]
+                asst_img_msgs = [m for m in stored_msgs if m.get("images") and m["role"] == "assistant"]
+                if user_img_msgs or asst_img_msgs:
+                    user_idx = 0
+                    asst_idx = 0
+                    for entry in result:
+                        if entry.get("images"):
+                            continue  # already has images
+                        if entry["role"] == "user" and user_idx < len(user_img_msgs):
+                            if user_img_msgs[user_idx]["content"] == entry["content"]:
+                                entry["images"] = user_img_msgs[user_idx]["images"]
+                                user_idx += 1
+                        elif entry["role"] == "assistant" and asst_idx < len(asst_img_msgs):
+                            # For Foundry, assistant images are stored with empty content
+                            # as separate records — attach to the next assistant message
+                            entry["images"] = asst_img_msgs[asst_idx]["images"]
+                            asst_idx += 1
+            except Exception as e:
+                logger.warning("Failed to merge images from message store: %s", e)
+
             return result
         except Exception as e:
             logger.error("Failed to get messages: %s", e)
@@ -1156,6 +1213,7 @@ class AgentService:
                 arguments=fn_args,
                 agent_id=agent_id,
                 agent_name=self._get_agent_name(agent_id),
+                thread_id=thread_id,
             )
         elif fn_name in AZURE_COST_TOOL_NAMES:
             return execute_azure_cost_tool(tool_name=fn_name, arguments=fn_args)
@@ -1312,7 +1370,7 @@ class AgentService:
         if not self.client or not thread_id:
             return False
         try:
-            runs = list(self.client.runs.list(thread_id=thread_id))
+            runs = list(self.client.runs.list(thread_id=thread_id, limit=5))
             active = {"queued", "in_progress", "requires_action"}
             return any(getattr(r, "status", None) in active for r in runs)
         except Exception:
@@ -1333,6 +1391,7 @@ class AgentService:
         provider: str | None = None,
         images: list[dict] | None = None,
         allow_image_follow_up: bool = True,
+        custom_instructions: str = "",
     ) -> Generator[str, None, None]:
         """Send a user message and stream the assistant response as SSE JSON lines."""
         provider = (provider or self.provider or "azure_foundry").strip().lower()
@@ -1341,7 +1400,7 @@ class AgentService:
         if provider in ("openai", "anthropic"):
             tool_ids = tools or []
             all_tool_defs = self._build_raw_tool_definitions(tool_ids)
-            instructions = self._build_instructions(tool_ids)
+            instructions = self._build_instructions(tool_ids, custom_instructions=custom_instructions)
 
             if provider == "openai":
                 from app.services.providers import openai_provider
@@ -1377,6 +1436,7 @@ class AgentService:
             return
 
         uploaded_file_ids: list[str] = []
+        _emitted_images: list[dict] = []  # track tool-generated images for persistence
 
         try:
             foundry_agent = self.ensure_foundry_agent(
@@ -1384,6 +1444,7 @@ class AgentService:
                 foundry_agent_id=foundry_agent_id,
                 model=model,
                 tools=tools or [],
+                custom_instructions=custom_instructions,
             )
         except Exception as e:
             logger.error("ensure_foundry_agent failed: %s", e, exc_info=True)
@@ -1391,8 +1452,8 @@ class AgentService:
             return
 
         try:
-            # Wait for any active runs (trigger, etc.) before adding a message
-            self._wait_for_active_runs(thread_id, timeout=60, cancel_after=30)
+            # Wait briefly for any active runs (trigger, etc.) before adding a message
+            self._wait_for_active_runs(thread_id, timeout=30, cancel_after=15)
 
             # Merge any cached tool images (e.g. from a previous Twitch capture)
             cached_imgs = pop_tool_images(thread_id)
@@ -1406,11 +1467,28 @@ class AgentService:
                         "data_uri": f"data:{ci['media_type']};base64,{ci['data']}",
                     })
 
-            uploaded_file_ids = self._post_user_message(
-                thread_id=thread_id,
-                content=content,
-                images=images,
-            )
+            # Persist user images to Cosmos for reload
+            if images:
+                from app.services.message_store import message_store
+                user_img_list = [{"data": img["data"], "media_type": img["media_type"]} for img in images]
+                message_store.store_message(thread_id, "user", content, images=user_img_list)
+
+            # Post user message with retry on active-run conflict
+            for _attempt in range(3):
+                try:
+                    uploaded_file_ids = self._post_user_message(
+                        thread_id=thread_id,
+                        content=content,
+                        images=images,
+                    )
+                    break
+                except Exception as post_err:
+                    if "while a run" in str(post_err).lower() and _attempt < 2:
+                        logger.info("Thread %s busy — waiting before retry (%d/2)", thread_id, _attempt + 1)
+                        yield json.dumps({"type": "delta", "content": "Waiting for a running task to finish…\n"})
+                        self._wait_for_active_runs(thread_id, timeout=15, cancel_after=5)
+                        continue
+                    raise
 
             full_response = ""
 
@@ -1488,6 +1566,7 @@ class AgentService:
                         # Strip large image data before sending to the model
                         img_dict = strip_image_from_result(result, thread_id)
                         if img_dict:
+                            _emitted_images.append(img_dict)
                             yield json.dumps({"type": "image", "content": "", "data": img_dict})
 
                         tool_outputs.append(
@@ -1503,7 +1582,7 @@ class AgentService:
                     tool_outputs=tool_outputs,
                 )
 
-                for _poll in range(60):
+                for _poll in range(120):
                     if run.status in ("completed", "failed", "cancelled", "expired", "requires_action"):
                         break
                     time.sleep(0.5)
@@ -1511,6 +1590,19 @@ class AgentService:
 
             # ── Handle non-completed terminal states ─────────────────
             run_status = getattr(run, "status", None) if run else None
+
+            if run_status in ("queued", "in_progress"):
+                logger.warning(
+                    "stream_response: run %s still %s after polling — waiting more",
+                    run.id if run else "?", run_status,
+                )
+                # Give it more time - poll another 60s
+                for _extra in range(120):
+                    run = self.client.runs.get(thread_id=thread_id, run_id=run.id)
+                    if run.status in ("completed", "failed", "cancelled", "expired", "requires_action"):
+                        break
+                    time.sleep(0.5)
+                run_status = getattr(run, "status", None)
 
             if run_status in ("failed", "cancelled", "expired"):
                 last_error = getattr(run, "last_error", None)
@@ -1591,40 +1683,41 @@ class AgentService:
 
             generated_imgs = pop_tool_images(thread_id)
             if generated_imgs and allow_image_follow_up:
-                follow_up_delta_text = ""
-                follow_up_done_text = ""
-                for follow_chunk in self.stream_response(
-                    agent_id=agent_id,
-                    foundry_agent_id=foundry_agent.id,
-                    thread_id=thread_id,
-                    model=model,
-                    content=IMAGE_FOLLOW_UP_PROMPT,
-                    agent_name=agent_name,
-                    tools=tools,
-                    provider=provider,
-                    images=generated_imgs,
-                    allow_image_follow_up=False,
-                ):
-                    try:
-                        follow_event = json.loads(follow_chunk)
-                    except Exception:
-                        yield follow_chunk
-                        continue
+                # Persist tool-generated images
+                from app.services.message_store import message_store as _msg_store
+                _msg_store.store_message(thread_id, "assistant", "", images=generated_imgs)
 
-                    follow_type = follow_event.get("type")
-                    if follow_type == "delta":
-                        text = follow_event.get("content", "")
-                        if text:
-                            follow_up_delta_text += text
-                            full_response += text
-                        yield follow_chunk
-                    elif follow_type == "done":
-                        follow_up_done_text = follow_event.get("content", "") or ""
-                    else:
-                        yield follow_chunk
-
-                if follow_up_done_text and not follow_up_delta_text:
-                    full_response += follow_up_done_text
+                # Post follow-up message with images directly (skip the full
+                # stream_response machinery to avoid retry/wait overhead)
+                logger.info("Image follow-up: posting %d image(s) to thread %s", len(generated_imgs), thread_id)
+                try:
+                    follow_imgs = [
+                        {"data": gi["data"], "media_type": gi["media_type"],
+                         "data_uri": f"data:{gi['media_type']};base64,{gi['data']}"}
+                        for gi in generated_imgs
+                    ]
+                    # Brief wait for the just-completed run to fully settle
+                    time.sleep(1)
+                    self._post_user_message(
+                        thread_id=thread_id,
+                        content=IMAGE_FOLLOW_UP_PROMPT,
+                        images=follow_imgs,
+                    )
+                    # Stream the follow-up run
+                    with self.client.runs.stream(
+                        thread_id=thread_id,
+                        agent_id=foundry_agent.id,
+                    ) as follow_stream:
+                        for event_type, event_data, *_ in follow_stream:
+                            if isinstance(event_data, MessageDeltaChunk):
+                                for part in event_data.delta.content:
+                                    if isinstance(part, MessageDeltaTextContent) and part.text:
+                                        text = part.text.value or ""
+                                        if text:
+                                            full_response += text
+                                            yield json.dumps({"type": "delta", "content": text})
+                except Exception as follow_err:
+                    logger.warning("Image follow-up failed: %s", follow_err)
 
                 yield json.dumps({"type": "done", "content": full_response})
                 return
@@ -1652,6 +1745,10 @@ class AgentService:
             logger.error("stream_response error: %s", e, exc_info=True)
             yield json.dumps({"type": "error", "content": str(e)})
         finally:
+            # Persist tool-generated images to Cosmos for reload
+            if _emitted_images:
+                from app.services.message_store import message_store
+                message_store.store_message(thread_id, "assistant", "", images=_emitted_images)
             self._delete_uploaded_files(uploaded_file_ids)
 
     # ── Auto-naming ───────────────────────────────────────────────
@@ -1820,6 +1917,7 @@ class AgentService:
         provider: str | None = None,
         images: list[dict] | None = None,
         allow_image_follow_up: bool = True,
+        custom_instructions: str = "",
     ) -> str:
         """Send a message and collect the full response synchronously."""
         provider = (provider or self.provider or "azure_foundry").strip().lower()
@@ -1837,6 +1935,7 @@ class AgentService:
                 provider=provider,
                 images=images,
                 allow_image_follow_up=allow_image_follow_up,
+                custom_instructions=custom_instructions,
             ):
                 try:
                     data = json.loads(chunk_json)
@@ -1859,6 +1958,7 @@ class AgentService:
                 foundry_agent_id=foundry_agent_id,
                 model=model,
                 tools=tools or [],
+                custom_instructions=custom_instructions,
             )
         except Exception:
             logger.error("run_non_streaming: foundry agent %s not found and recreation failed", foundry_agent_id)
@@ -1874,6 +1974,12 @@ class AgentService:
                 cached_imgs = pop_tool_images(thread_id)
                 if cached_imgs:
                     images = [*images, *cached_imgs]
+
+            # Persist user images to Cosmos for reload
+            if images:
+                from app.services.message_store import message_store
+                user_img_list = [{"data": img["data"], "media_type": img["media_type"]} for img in images]
+                message_store.store_message(thread_id, "user", content, images=user_img_list)
 
             uploaded_file_ids = self._post_user_message(
                 thread_id=thread_id,
@@ -1920,6 +2026,8 @@ class AgentService:
                                 "run_non_streaming: tool %s result=%s",
                                 fn_name, json.dumps(result)[:500],
                             )
+                            # Strip image data before sending to model (caches in _thread_images)
+                            strip_image_from_result(result, thread_id)
                             tool_outputs.append(
                                 ToolOutput(tool_call_id=tc.id, output=json.dumps(result))
                             )
@@ -2017,6 +2125,10 @@ class AgentService:
                 return fallback
 
             generated_imgs = pop_tool_images(thread_id)
+            # Persist tool-generated images to Cosmos for reload
+            if generated_imgs:
+                from app.services.message_store import message_store
+                message_store.store_message(thread_id, "assistant", "", images=generated_imgs)
             if generated_imgs and allow_image_follow_up:
                 return self.run_non_streaming(
                     agent_id=agent_id,
@@ -2028,6 +2140,7 @@ class AgentService:
                     provider=provider,
                     images=generated_imgs,
                     allow_image_follow_up=False,
+                    custom_instructions=custom_instructions,
                 )
 
             messages = self.client.messages.list(

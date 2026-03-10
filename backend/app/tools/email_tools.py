@@ -60,6 +60,21 @@ EMAIL_SEND_TOOL_DEFINITIONS = [
                         "Defaults to false (plain text)."
                     ),
                 },
+                "image_base64": {
+                    "type": "string",
+                    "description": (
+                        "Base64-encoded image data to embed in the email. "
+                        "The image will be attached inline. Use this to include "
+                        "captured images (e.g. from Twitch stream captures)."
+                    ),
+                },
+                "image_media_type": {
+                    "type": "string",
+                    "description": (
+                        "MIME type of the image, e.g. 'image/jpeg' or 'image/png'. "
+                        "Defaults to 'image/jpeg'."
+                    ),
+                },
             },
             "required": ["to", "subject", "body"],
         },
@@ -236,8 +251,13 @@ def _send_smtp(
     subject: str,
     body: str,
     is_html: bool = False,
+    images: list[dict] | None = None,
 ) -> dict[str, Any]:
-    """Actually send an email via SMTP. Returns a result dict."""
+    """Actually send an email via SMTP. Returns a result dict.
+
+    images: optional list of {"data": base64_str, "media_type": "image/jpeg"}
+            Attached as inline CID images (cid:notif_img_0, cid:notif_img_1, ...).
+    """
     import io
 
     try:
@@ -250,9 +270,28 @@ def _send_smtp(
             charset = "utf-8"
 
         if is_html:
-            msg = MIMEMultipart("alternative")
-            msg.attach(MIMEText(body, "plain", charset))
-            msg.attach(MIMEText(body, "html", charset))
+            if images:
+                # Use "related" so inline CID images render properly
+                msg = MIMEMultipart("related")
+                alt_part = MIMEMultipart("alternative")
+                alt_part.attach(MIMEText(body, "plain", charset))
+                alt_part.attach(MIMEText(body, "html", charset))
+                msg.attach(alt_part)
+                # Attach images as inline CID parts
+                import base64
+                from email.mime.image import MIMEImage
+                for i, img in enumerate(images):
+                    img_data = base64.b64decode(img["data"])
+                    media_type = img.get("media_type", "image/jpeg")
+                    subtype = media_type.split("/")[-1] if "/" in media_type else "jpeg"
+                    mime_img = MIMEImage(img_data, _subtype=subtype)
+                    mime_img.add_header("Content-ID", f"<notif_img_{i}>")
+                    mime_img.add_header("Content-Disposition", "inline", filename=f"image_{i}.{subtype}")
+                    msg.attach(mime_img)
+            else:
+                msg = MIMEMultipart("alternative")
+                msg.attach(MIMEText(body, "plain", charset))
+                msg.attach(MIMEText(body, "html", charset))
         else:
             msg = MIMEText(body, "plain", charset)
 
@@ -618,6 +657,26 @@ def execute_email_tool(
 
     # ── Send tools ──
     if tool_name == "send_email":
+        # Build inline images list if provided
+        email_images = None
+        img_b64 = arguments.get("image_base64", "")
+        if img_b64:
+            email_images = [{"data": img_b64, "media_type": arguments.get("image_media_type", "image/jpeg")}]
+
+        email_body = arguments["body"]
+        is_html = arguments.get("is_html", False)
+
+        # If images provided but body is plain text, wrap in simple HTML
+        if email_images and not is_html:
+            import html as html_mod
+            escaped_body = html_mod.escape(email_body).replace("\n", "<br>")
+            img_tags = "".join(
+                f'<div style="margin-top: 16px;"><img src="cid:notif_img_{i}" style="max-width: 100%;" /></div>'
+                for i in range(len(email_images))
+            )
+            email_body = f'<div style="font-family: sans-serif;">{escaped_body}{img_tags}</div>'
+            is_html = True
+
         return _send_smtp(
             smtp_host=account["smtp_host"],
             smtp_port=account["smtp_port"],
@@ -628,8 +687,9 @@ def execute_email_tool(
             from_name=account.get("from_name", ""),
             to=arguments["to"],
             subject=arguments["subject"],
-            body=arguments["body"],
-            is_html=arguments.get("is_html", False),
+            body=email_body,
+            is_html=is_html,
+            images=email_images,
         )
 
     # ── Read tools ──
