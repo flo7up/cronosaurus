@@ -129,18 +129,16 @@ def execute_notification_tool(
     agent_chosen_group_id = arguments.get("distribution_group_id", "")
 
     # If no explicit image param, try the thread image cache
-    if not image_base64 and thread_id:
+    # This automatically includes images from tool results (e.g. Twitch captures)
+    images: list[dict] | None = None
+    if image_base64:
+        images = [{"data": image_base64, "media_type": image_media_type}]
+    elif thread_id:
         from app.services.agent_service import _thread_images, _thread_images_lock
         with _thread_images_lock:
             cached = _thread_images.get(thread_id, [])
             if cached:
-                image_base64 = cached[-1]["data"]
-                image_media_type = cached[-1].get("media_type", "image/jpeg")
-
-    # Build images list for storage/delivery
-    images: list[dict] | None = None
-    if image_base64:
-        images = [{"data": image_base64, "media_type": image_media_type}]
+                images = [{"data": img["data"], "media_type": img.get("media_type", "image/jpeg")} for img in cached]
 
     if not title or not body:
         return {"success": False, "error": "title and body are required"}

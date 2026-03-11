@@ -433,11 +433,10 @@ Parameters:
   have data, tables, or analysis to share, put it here. If omitted, the
   body text is used.
 - level: info | success | warning | error
-- image_base64: (optional) Base64-encoded image data to include. If you
-  just captured an image (e.g. via capture_twitch_stream), you can pass
-  the image_base64 value from the tool result to embed it in the
-  notification and email. If omitted but a tool-captured image exists in
-  the current conversation, it will be automatically included.
+- image_base64: (optional) Base64-encoded image data to include explicitly.
+  Usually NOT needed — any images captured by tools in this conversation
+  (e.g. via capture_twitch_stream) are AUTOMATICALLY included in the
+  notification and email without you needing to pass them.
 - image_media_type: (optional) MIME type of the image (default: image/jpeg).
 
 Rules:
@@ -450,8 +449,10 @@ Rules:
   important findings without them having to check the chat.
 - When a trigger task completes, send a notification with the full results
   in the 'content' field so the user receives everything via email.
-- When you have a captured image (e.g. from a stream capture tool), include
-  it in the notification by passing the image_base64 from the capture result.
+- Images from tool results (stream captures, screenshots, etc.) are
+  automatically attached to the notification and email. You do NOT need
+  to pass image_base64 manually — just call send_notification and any
+  captured images will be included.
 """
 
 AZURE_COST_INSTRUCTIONS_SUFFIX = """
