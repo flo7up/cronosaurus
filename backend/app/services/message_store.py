@@ -50,8 +50,10 @@ class MessageStore:
     def store_message(
         self, thread_id: str, role: str, content: str,
         images: list[dict] | None = None,
+        tool_steps: list[dict] | None = None,
+        created_at: str | None = None,
     ) -> None:
-        """Persist a single message, optionally with images."""
+        """Persist a single message, optionally with images and tool steps."""
         if not self._initialized:
             return
         try:
@@ -60,10 +62,12 @@ class MessageStore:
                 "thread_id": thread_id,
                 "role": role,
                 "content": content,
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": created_at or datetime.now(timezone.utc).isoformat(),
             }
             if images:
                 doc["images"] = images
+            if tool_steps:
+                doc["tool_steps"] = tool_steps
             self._container.create_item(doc)
         except Exception as e:
             logger.warning("Failed to store message for thread %s: %s", thread_id, e)
@@ -75,10 +79,9 @@ class MessageStore:
         try:
             items = list(self._container.query_items(
                 query=(
-                    "SELECT c.role, c.content, c.images FROM c "
+                    "SELECT c.role, c.content, c.images, c.tool_steps, c.ts FROM c "
                     "WHERE c.thread_id = @tid "
                     "AND c.role IN ('user', 'assistant') "
-                    "AND (c.content != '' OR IS_DEFINED(c.images)) "
                     "ORDER BY c.ts ASC "
                     "OFFSET 0 LIMIT @limit"
                 ),
@@ -90,9 +93,16 @@ class MessageStore:
             ))
             result = []
             for m in items:
-                entry: dict = {"role": m["role"], "content": m["content"]}
+                # Skip image-only placeholder records (empty content, only images)
+                if not m.get("content") and not m.get("tool_steps") and m.get("images"):
+                    continue
+                entry: dict = {"role": m["role"], "content": m.get("content", "")}
                 if m.get("images"):
                     entry["images"] = m["images"]
+                if m.get("tool_steps"):
+                    entry["tool_steps"] = m["tool_steps"]
+                if m.get("ts"):
+                    entry["created_at"] = m["ts"]
                 result.append(entry)
             return result
         except Exception as e:

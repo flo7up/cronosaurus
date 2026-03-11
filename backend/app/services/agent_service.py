@@ -834,12 +834,25 @@ class AgentService:
         - If the agent doesn't exist in Foundry, recreate it.
         - If it exists but tools/instructions have changed, update it in-place
           so MCP and other dynamically-discovered tools stay in sync.
+        - Skips the update roundtrip if the config hasn't changed since last call.
         """
+        import hashlib
         tool_defs = self._build_tool_definitions(tools)
         instructions = self._build_instructions(tools, custom_instructions=custom_instructions, agent_id=agent_id)
 
+        # Skip update if config hasn't changed (avoid 5-10s Foundry API roundtrip)
+        config_hash = hashlib.md5(
+            f"{foundry_agent_id}:{len(tool_defs)}:{instructions[:200]}".encode()
+        ).hexdigest()
+        if not hasattr(self, "_agent_config_cache"):
+            self._agent_config_cache: dict[str, str] = {}
+        cached = self._agent_config_cache.get(foundry_agent_id)
+
         try:
             agent = self.get_foundry_agent(foundry_agent_id)
+            if cached == config_hash:
+                return agent  # nothing changed, skip update
+
             # Update the existing agent's tools and instructions to stay in sync
             try:
                 kwargs: dict = {}
@@ -852,10 +865,13 @@ class AgentService:
                         agent_id=foundry_agent_id, **kwargs
                     )
                     self._foundry_agents[foundry_agent_id] = agent
+                    self._agent_config_cache[foundry_agent_id] = config_hash
                     logger.info(
                         "Updated Foundry agent %s: tools=%d",
                         foundry_agent_id, len(tool_defs),
                     )
+                else:
+                    self._agent_config_cache[foundry_agent_id] = config_hash
             except Exception as e:
                 # If the update failed because the agent no longer exists
                 # server-side (expired/deleted), evict cache and recreate.
@@ -1023,7 +1039,7 @@ class AgentService:
     # ── Messages ─────────────────────────────────────────────────
 
     def get_messages(self, thread_id: str, provider: str | None = None) -> list[dict]:
-        """Fetch message history, dispatching to the right provider."""
+        """Fetch message history from Cosmos DB (fast) with Foundry API fallback."""
         provider = (provider or self.provider or "azure_foundry").strip().lower()
         if provider == "openai":
             from app.services.providers import openai_provider
@@ -1032,116 +1048,123 @@ class AgentService:
             from app.services.providers import anthropic_provider
             return anthropic_provider.get_messages(thread_id)
 
-        # Azure Foundry
+        # Azure Foundry — read from Cosmos first (fast path)
+        from app.services.message_store import message_store
+        cosmos_msgs = message_store.get_messages(thread_id)
+        if cosmos_msgs:
+            return cosmos_msgs
+
+        # Fallback: fetch from Foundry API (slow, for legacy threads without Cosmos data)
         if not self.client:
             return []
         try:
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-
-            messages = self.client.messages.list(
-                thread_id=thread_id,
-                order=ListSortOrder.ASCENDING,
-            )
-
-            # Build a map: run_id -> list of tool steps (fetched in parallel)
-            run_tool_steps: dict[str, list[dict]] = {}
-            try:
-                runs = list(self.client.runs.list(
-                    thread_id=thread_id,
-                    order=ListSortOrder.ASCENDING,
-                ))
-
-                def _fetch_steps(run):
-                    steps = list(self.client.run_steps.list(
-                        thread_id=thread_id,
-                        run_id=run.id,
-                    ))
-                    tool_steps = []
-                    for step in steps:
-                        sd = getattr(step, "step_details", None)
-                        if sd and hasattr(sd, "tool_calls") and sd.tool_calls:
-                            for tc in sd.tool_calls:
-                                fn = getattr(tc, "function", None)
-                                if fn:
-                                    ts: dict = {
-                                        "name": fn.name,
-                                        "arguments": {},
-                                        "status": "completed" if step.status.value == "completed" else "error",
-                                    }
-                                    try:
-                                        ts["arguments"] = json.loads(fn.arguments) if isinstance(fn.arguments, str) else (fn.arguments or {})
-                                    except Exception:
-                                        ts["arguments"] = {}
-                                    try:
-                                        fn_dict = fn.as_dict() if hasattr(fn, "as_dict") else {}
-                                        output_str = fn_dict.get("output", "")
-                                        if output_str:
-                                            ts["result"] = json.loads(output_str) if isinstance(output_str, str) else output_str
-                                    except Exception:
-                                        pass
-                                    tool_steps.append(ts)
-                    return (run.id, tool_steps)
-
-                # Fetch run steps in parallel (up to 3 at a time)
-                with ThreadPoolExecutor(max_workers=min(3, len(runs) or 1)) as pool:
-                    futures = {pool.submit(_fetch_steps, run): run for run in runs}
-                    for future in as_completed(futures):
-                        try:
-                            run_id, tool_steps = future.result()
-                            if tool_steps:
-                                run_tool_steps[run_id] = tool_steps
-                        except Exception:
-                            pass
-            except Exception as e:
-                logger.warning("Failed to fetch run steps for thread %s: %s", thread_id, e)
-
-            result = []
-            for msg in messages:
-                content = ""
-                if msg.text_messages:
-                    content = msg.text_messages[-1].text.value
-                entry: dict = {"role": msg.role, "content": content}
-                if hasattr(msg, "created_at") and msg.created_at:
-                    entry["created_at"] = (
-                        msg.created_at.isoformat()
-                        if hasattr(msg.created_at, "isoformat")
-                        else str(msg.created_at)
-                    )
-                # Attach tool steps for assistant messages that belong to a run
-                run_id = getattr(msg, "run_id", None)
-                if msg.role == "assistant" and run_id and run_id in run_tool_steps:
-                    entry["tool_steps"] = run_tool_steps[run_id]
-                result.append(entry)
-
-            # Merge persisted images from Cosmos message store
-            try:
-                from app.services.message_store import message_store
-                stored_msgs = message_store.get_messages(thread_id)
-                # Build lists of image-bearing stored messages by role
-                user_img_msgs = [m for m in stored_msgs if m.get("images") and m["role"] == "user"]
-                asst_img_msgs = [m for m in stored_msgs if m.get("images") and m["role"] == "assistant"]
-                if user_img_msgs or asst_img_msgs:
-                    user_idx = 0
-                    asst_idx = 0
-                    for entry in result:
-                        if entry.get("images"):
-                            continue  # already has images
-                        if entry["role"] == "user" and user_idx < len(user_img_msgs):
-                            if user_img_msgs[user_idx]["content"] == entry["content"]:
-                                entry["images"] = user_img_msgs[user_idx]["images"]
-                                user_idx += 1
-                        elif entry["role"] == "assistant" and asst_idx < len(asst_img_msgs):
-                            # For Foundry, assistant images are stored with empty content
-                            # as separate records — attach to the next assistant message
-                            entry["images"] = asst_img_msgs[asst_idx]["images"]
-                            asst_idx += 1
-            except Exception as e:
-                logger.warning("Failed to merge images from message store: %s", e)
-
-            return result
+            return self._fetch_messages_from_foundry(thread_id)
         except Exception as e:
             logger.error("Failed to get messages: %s", e)
             return []
+
+    def _fetch_messages_from_foundry(self, thread_id: str) -> list[dict]:
+        """Fetch messages from Foundry API — slow, used only as fallback."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        messages = self.client.messages.list(
+            thread_id=thread_id,
+            order=ListSortOrder.ASCENDING,
+        )
+
+        # Build a map: run_id -> list of tool steps (fetched in parallel)
+        run_tool_steps: dict[str, list[dict]] = {}
+        try:
+            runs = list(self.client.runs.list(
+                thread_id=thread_id,
+                order=ListSortOrder.ASCENDING,
+            ))
+
+            def _fetch_steps(run):
+                steps = list(self.client.run_steps.list(
+                    thread_id=thread_id,
+                    run_id=run.id,
+                ))
+                tool_steps = []
+                for step in steps:
+                    sd = getattr(step, "step_details", None)
+                    if sd and hasattr(sd, "tool_calls") and sd.tool_calls:
+                        for tc in sd.tool_calls:
+                            fn = getattr(tc, "function", None)
+                            if fn:
+                                ts: dict = {
+                                    "name": fn.name,
+                                    "arguments": {},
+                                    "status": "completed" if step.status.value == "completed" else "error",
+                                }
+                                try:
+                                    ts["arguments"] = json.loads(fn.arguments) if isinstance(fn.arguments, str) else (fn.arguments or {})
+                                except Exception:
+                                    ts["arguments"] = {}
+                                try:
+                                    fn_dict = fn.as_dict() if hasattr(fn, "as_dict") else {}
+                                    output_str = fn_dict.get("output", "")
+                                    if output_str:
+                                        ts["result"] = json.loads(output_str) if isinstance(output_str, str) else output_str
+                                except Exception:
+                                    pass
+                                tool_steps.append(ts)
+                return (run.id, tool_steps)
+
+            # Fetch run steps in parallel (up to 3 at a time)
+            with ThreadPoolExecutor(max_workers=min(3, len(runs) or 1)) as pool:
+                futures = {pool.submit(_fetch_steps, run): run for run in runs}
+                for future in as_completed(futures):
+                    try:
+                        run_id, tool_steps = future.result()
+                        if tool_steps:
+                            run_tool_steps[run_id] = tool_steps
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.warning("Failed to fetch run steps for thread %s: %s", thread_id, e)
+
+        result = []
+        for msg in messages:
+            content = ""
+            if msg.text_messages:
+                content = msg.text_messages[-1].text.value
+            entry: dict = {"role": msg.role, "content": content}
+            if hasattr(msg, "created_at") and msg.created_at:
+                entry["created_at"] = (
+                    msg.created_at.isoformat()
+                    if hasattr(msg.created_at, "isoformat")
+                    else str(msg.created_at)
+                )
+            # Attach tool steps for assistant messages that belong to a run
+            run_id = getattr(msg, "run_id", None)
+            if msg.role == "assistant" and run_id and run_id in run_tool_steps:
+                entry["tool_steps"] = run_tool_steps[run_id]
+            result.append(entry)
+
+        # Merge persisted images from Cosmos message store
+        try:
+            from app.services.message_store import message_store
+            stored_msgs = message_store.get_messages(thread_id)
+            user_img_msgs = [m for m in stored_msgs if m.get("images") and m["role"] == "user"]
+            asst_img_msgs = [m for m in stored_msgs if m.get("images") and m["role"] == "assistant"]
+            if user_img_msgs or asst_img_msgs:
+                user_idx = 0
+                asst_idx = 0
+                for entry in result:
+                    if entry.get("images"):
+                        continue
+                    if entry["role"] == "user" and user_idx < len(user_img_msgs):
+                        if user_img_msgs[user_idx]["content"] == entry["content"]:
+                            entry["images"] = user_img_msgs[user_idx]["images"]
+                            user_idx += 1
+                    elif entry["role"] == "assistant" and asst_idx < len(asst_img_msgs):
+                        entry["images"] = asst_img_msgs[asst_idx]["images"]
+                        asst_idx += 1
+        except Exception as e:
+            logger.warning("Failed to merge images from message store: %s", e)
+
+        return result
 
     # ── Tool execution dispatch ──────────────────────────────────
 
@@ -1486,6 +1509,7 @@ class AgentService:
 
         uploaded_file_ids: list[str] = []
         _emitted_images: list[dict] = []  # track tool-generated images for persistence
+        _all_tool_steps: list[dict] = []  # track all tool steps for Cosmos persistence
 
         try:
             foundry_agent = self.ensure_foundry_agent(
@@ -1611,6 +1635,9 @@ class AgentService:
                             yield json.dumps({"type": "trigger_update", "data": result})
 
                         yield json.dumps({"type": "tool_result", "content": "", "data": {"name": fn_name, "result": result}})
+
+                        # Track tool step for Cosmos persistence
+                        _all_tool_steps.append({"name": fn_name, "arguments": parsed_args if isinstance(parsed_args, dict) else {}, "result": result, "status": "completed"})
 
                         # Strip large image data before sending to the model
                         img_dict = strip_image_from_result(result, thread_id)
@@ -1794,9 +1821,19 @@ class AgentService:
             logger.error("stream_response error: %s", e, exc_info=True)
             yield json.dumps({"type": "error", "content": str(e)})
         finally:
-            # Persist tool-generated images to Cosmos for reload
-            if _emitted_images:
-                from app.services.message_store import message_store
+            # Persist messages to Cosmos for fast reload
+            from app.services.message_store import message_store
+            # Store user message (skip if images already stored it above)
+            if not images:
+                message_store.store_message(thread_id, "user", content)
+            # Store assistant response with tool steps
+            if full_response or _all_tool_steps:
+                message_store.store_message(
+                    thread_id, "assistant", full_response,
+                    tool_steps=_all_tool_steps if _all_tool_steps else None,
+                    images=[{"data": img["data"], "media_type": img["media_type"]} for img in _emitted_images] if _emitted_images else None,
+                )
+            elif _emitted_images:
                 message_store.store_message(thread_id, "assistant", "", images=_emitted_images)
             self._delete_uploaded_files(uploaded_file_ids)
 
@@ -2198,7 +2235,16 @@ class AgentService:
             )
             for msg in messages:
                 if msg.role == "assistant" and msg.text_messages:
-                    return msg.text_messages[-1].text.value
+                    response_text = msg.text_messages[-1].text.value
+                    # Persist to Cosmos for fast reload
+                    from app.services.message_store import message_store
+                    if not images:
+                        message_store.store_message(thread_id, "user", content)
+                    message_store.store_message(
+                        thread_id, "assistant", response_text,
+                        images=[{"data": img["data"], "media_type": img["media_type"]} for img in generated_imgs] if generated_imgs else None,
+                    )
+                    return response_text
             return ""
 
         except Exception as e:
