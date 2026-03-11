@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
 import type { Message, AgentTrigger, Agent, ToolStep, MCPServer, TodoItem, EmailAccount, ToolCatalogEntry, DistributionGroup } from "../types/chat";
 import ModelSelector from "./ModelSelector";
+import ToggleSwitch from "./ToggleSwitch";
 
 /* ── Instant Tooltip ─────────────────────────────────────────── */
 function Tooltip({ text, children }: { text?: string; children: ReactNode }) {
@@ -39,6 +40,7 @@ interface ChatViewProps {
   toolLibrary: string[];
   mcpServers: MCPServer[];
   agentBusy?: boolean;
+  agentBusyReason?: "trigger" | "run" | null;
   emailAccounts: EmailAccount[];
   onEmailAccountChange: (accountId: string | null) => void;
   onNewAgentWithPrompt: (prompt: string, tools?: string[]) => void;
@@ -73,6 +75,7 @@ export default function ChatView({
   toolLibrary,
   mcpServers,
   agentBusy,
+  agentBusyReason,
   emailAccounts,
   onEmailAccountChange,
   onNewAgentWithPrompt,
@@ -234,12 +237,25 @@ export default function ChatView({
 
         {/* Status banner */}
         {serviceReady === false && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-yellow-900/60 border border-yellow-700 rounded-lg px-4 py-2 text-sm text-yellow-200 max-w-md text-center">
-            Agent service not configured. Set{" "}
-            <code className="bg-yellow-800/50 px-1 rounded">
-              PROJECT_ENDPOINT
-            </code>{" "}
-            in backend/.env
+          <div className="w-full max-w-2xl mb-4">
+            <div className="terminal-panel rounded-md border-amber-500/25 overflow-hidden">
+              <div className="flex items-center gap-2 px-3 py-1.5 border-b border-amber-500/15 bg-amber-500/5">
+                <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <span className="terminal-label text-amber-400 text-[0.65rem]">warning</span>
+              </div>
+              <div className="flex items-center gap-3 px-4 py-3">
+                <svg className="w-5 h-5 shrink-0 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+                <span className="text-xs text-[#b0c4cc]">
+                  Agent service not configured. Set{" "}
+                  <code className="terminal-chip px-1.5 py-0.5 text-[0.7rem] text-amber-400 border-amber-500/25">
+                    PROJECT_ENDPOINT
+                  </code>{" "}
+                  in <span className="text-[#c9f6ef]">backend/.env</span>
+                </span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -427,7 +443,8 @@ export default function ChatView({
           </svg>
         </button>
         {serviceReady === false && (
-          <span className="ml-auto terminal-chip px-2 py-1 text-[10px] text-yellow-300">
+          <span className="ml-auto flex items-center gap-1.5 terminal-chip px-2 py-1 text-[10px] text-amber-400 border-amber-500/25">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
             Agent not connected
           </span>
         )}
@@ -455,13 +472,17 @@ export default function ChatView({
       {activeAgent.trigger && <TriggerStatusBar trigger={activeAgent.trigger} onOpenPanel={() => onOpenManagement("triggers")} />}
 
       {/* Processing banner when a trigger run is in progress */}
-      {agentBusy && (
+      {agentBusy && !isStreaming && (
         <div className="terminal-panel mx-3 mt-3 flex items-center gap-2 px-4 py-2 text-xs text-[#97ff8a]">
           <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <span>Processing a trigger run… Your messages will be sent once it completes.</span>
+          <span>
+            {agentBusyReason === "trigger"
+              ? "Processing a trigger run… Your messages will be sent once it completes."
+              : "This agent is finishing another run… Your messages will be sent once it completes."}
+          </span>
         </div>
       )}
 
@@ -1208,17 +1229,11 @@ function ToolsDropdown({
                             : tool.description}
                         </div>
                       </div>
-                      <div
-                        className={`w-9 h-5 transition-colors relative flex-shrink-0 border ${
-                          enabled ? "bg-[#122215] border-[#97ff8a]/40" : "bg-[#16120c] border-[#1d4c5f]"
-                        }`}
-                      >
-                        <span
-                          className={`absolute top-0.5 w-4 h-4 bg-[#c9f6ef] shadow transition-transform ${
-                            enabled ? "left-[18px]" : "left-0.5"
-                          }`}
-                        />
-                      </div>
+                      <ToggleSwitch
+                        checked={enabled}
+                        accent="teal"
+                        className="pointer-events-none"
+                      />
                     </button>
                   </div>
                 );

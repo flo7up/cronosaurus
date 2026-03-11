@@ -122,26 +122,30 @@ class TriggerScheduler:
             "Agent %s: sending trigger prompt (%d chars) to thread %s via foundry agent %s",
             agent_id, len(prefixed_prompt), thread_id, foundry_agent_id,
         )
-        result = agent_service.run_non_streaming(
-            agent_id=agent_id,
-            foundry_agent_id=foundry_agent_id,
-            thread_id=thread_id,
-            model=model,
-            content=prefixed_prompt,
-            tools=agent_doc.get("tools", []),
-            provider=provider,
-            custom_instructions=agent_doc.get("custom_instructions", ""),
-        )
+        agent_service.mark_trigger_run_start(agent_id)
+        try:
+            result = agent_service.run_non_streaming(
+                agent_id=agent_id,
+                foundry_agent_id=foundry_agent_id,
+                thread_id=thread_id,
+                model=model,
+                content=prefixed_prompt,
+                tools=agent_doc.get("tools", []),
+                provider=provider,
+                custom_instructions=agent_doc.get("custom_instructions", ""),
+            )
 
-        # Update trigger metadata in Cosmos
-        agent_store.update_trigger_after_run(agent_id)
+            # Update trigger metadata in Cosmos
+            agent_store.update_trigger_after_run(agent_id)
 
-        logger.info(
-            "Agent %s trigger complete: %d chars response, first 200 chars: %s",
-            agent_id,
-            len(result) if result else 0,
-            (result[:200] if result else "(empty)"),
-        )
+            logger.info(
+                "Agent %s trigger complete: %d chars response, first 200 chars: %s",
+                agent_id,
+                len(result) if result else 0,
+                (result[:200] if result else "(empty)"),
+            )
+        finally:
+            agent_service.mark_trigger_run_end(agent_id)
 
 
 trigger_scheduler = TriggerScheduler()

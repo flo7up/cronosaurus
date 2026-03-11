@@ -38,14 +38,39 @@ import {
   testEmailAccount,
 } from "./api/user";
 
+type AgentStreamState = {
+  isStreaming: boolean;
+  content: string;
+  toolSteps: ToolStep[];
+  todos: TodoItem[];
+  images: Array<{ data: string; media_type: string }>;
+};
+
+type AgentBusyState = {
+  busy: boolean;
+  reason: "trigger" | "run" | null;
+};
+
+const EMPTY_STREAM_STATE: AgentStreamState = {
+  isStreaming: false,
+  content: "",
+  toolSteps: [],
+  todos: [],
+  images: [],
+};
+
+const IDLE_BUSY_STATE: AgentBusyState = {
+  busy: false,
+  reason: null,
+};
+
 function App() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messagesCache, setMessagesCache] = useState<
     Record<string, Message[]>
   >({});
-  const [streamingContent, setStreamingContent] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingStates, setStreamingStates] = useState<Record<string, AgentStreamState>>({});
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [serviceReady, setServiceReady] = useState<boolean | null>(null);
   const [models, setModels] = useState<string[]>([]);
@@ -53,9 +78,8 @@ function App() {
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
   const [showManagement, setShowManagement] = useState(false);
   const [managementTab, setManagementTab] = useState<"tools" | "triggers" | "email" | "mcp" | "notifications" | "appearance" | "settings">("tools");
-  const [streamingToolSteps, setStreamingToolSteps] = useState<ToolStep[]>([]);
-  const streamingToolStepsRef = useRef<ToolStep[]>([]);
-  const abortRef = useRef<AbortController | null>(null);
+  const streamingStatesRef = useRef<Record<string, AgentStreamState>>({});
+  const abortControllersRef = useRef<Record<string, AbortController>>({});
   const toolsChangeVersion = useRef(0);
   const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([]);
   const [toolCatalog, setToolCatalog] = useState<ToolCatalogEntry[]>([]);
@@ -65,10 +89,7 @@ function App() {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [disconnected, setDisconnected] = useState(false);
   const [distributionGroups, setDistributionGroups] = useState<DistributionGroup[]>([]);
-  const [agentBusy, setAgentBusy] = useState(false);
-  const [streamingAgentId, setStreamingAgentId] = useState<string | null>(null);
-  const [streamingTodos, setStreamingTodos] = useState<TodoItem[]>([]);
-  const [streamingImages, setStreamingImages] = useState<Array<{ data: string; media_type: string }>>([]);
+  const [agentBusy, setAgentBusy] = useState<AgentBusyState>(IDLE_BUSY_STATE);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
 
@@ -147,6 +168,82 @@ function App() {
   }, [activeId]);
 
   const activeAgent = activeId ? agents.find((a) => a.id === activeId) ?? null : null;
+  const activeStreamState = activeId ? streamingStates[activeId] ?? EMPTY_STREAM_STATE : EMPTY_STREAM_STATE;
+  const activeAgentIsStreaming = activeStreamState.isStreaming;
+  const streamingAgentIds = Object.entries(streamingStates)
+    .filter(([, state]) => state.isStreaming)
+    .map(([agentId]) => agentId);
+
+  const setAgentStreamState = useCallback(
+    (agentId: string, updater: (prev: AgentStreamState) => AgentStreamState) => {
+      setStreamingStates((prev) => {
+        const current = prev[agentId] ?? EMPTY_STREAM_STATE;
+        const nextState = updater(current);
+        const shouldKeep =
+          nextState.isStreaming ||
+          nextState.content.length > 0 ||
+          nextState.toolSteps.length > 0 ||
+          nextState.todos.length > 0 ||
+          nextState.images.length > 0;
+        if (!shouldKeep) {
+          if (!(agentId in prev)) return prev;
+          const next = { ...prev };
+          delete next[agentId];
+          streamingStatesRef.current = next;
+          return next;
+        }
+        const next = { ...prev, [agentId]: nextState };
+        streamingStatesRef.current = next;
+        return next;
+      });
+    },
+    []
+  );
+
+  const clearAgentStreamState = useCallback((agentId: string) => {
+    setStreamingStates((prev) => {
+      if (!(agentId in prev)) return prev;
+      const next = { ...prev };
+      delete next[agentId];
+      streamingStatesRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const stopAgentStream = useCallback(
+    (agentId: string, commitPartial = true) => {
+      const controller = abortControllersRef.current[agentId];
+      if (controller) {
+        controller.abort();
+        delete abortControllersRef.current[agentId];
+      }
+
+      const state = streamingStatesRef.current[agentId];
+      if (commitPartial && state) {
+        const partial = state.content || "";
+        if (partial || state.toolSteps.length > 0 || state.images.length > 0) {
+          const assistantMsg: Message = {
+            role: "assistant",
+            content: partial ? `${partial}\n\n*(generation stopped)*` : "*(generation stopped)*",
+            created_at: new Date().toISOString(),
+          };
+          if (state.toolSteps.length > 0) {
+            assistantMsg.toolSteps = [...state.toolSteps];
+          }
+          if (state.images.length > 0) {
+            assistantMsg.images = [...state.images];
+          }
+          setMessagesCache((prev) => ({
+            ...prev,
+            [agentId]: [...(prev[agentId] || []), assistantMsg],
+          }));
+        }
+      }
+
+      clearAgentStreamState(agentId);
+    },
+    [clearAgentStreamState]
+  );
 
   const refreshAgent = useCallback(
     async (agentId: string) => {
@@ -163,7 +260,7 @@ function App() {
   // Auto-refresh messages when the active agent has an active trigger
   useEffect(() => {
     if (!activeId || !activeAgent?.trigger?.active) return;
-    if (isStreaming) return; // don't poll while the user is chatting
+    if (activeAgentIsStreaming) return; // don't poll while the current agent is chatting
 
     const interval = setInterval(() => {
       fetchMessages(activeId)
@@ -185,24 +282,24 @@ function App() {
     }, 15_000); // poll every 15 seconds
 
     return () => clearInterval(interval);
-  }, [activeId, activeAgent?.trigger?.active, isStreaming, refreshAgent]);
+  }, [activeId, activeAgent?.trigger?.active, activeAgentIsStreaming, refreshAgent]);
 
   // Poll busy status when the active agent has an active trigger
   useEffect(() => {
-    if (!activeId || !activeAgent?.trigger?.active) {
-      setAgentBusy(false);
+    if (!activeId || !activeAgent?.trigger?.active || activeAgentIsStreaming) {
+      setAgentBusy(IDLE_BUSY_STATE);
       return;
     }
     let cancelled = false;
     const poll = () => {
-      checkAgentBusy(activeId).then((busy) => {
-        if (!cancelled) setAgentBusy(busy);
+      checkAgentBusy(activeId).then((busyState) => {
+        if (!cancelled) setAgentBusy(busyState);
       });
     };
     poll(); // check immediately
     const iv = setInterval(poll, 15_000);
     return () => { cancelled = true; clearInterval(iv); };
-  }, [activeId, activeAgent?.trigger?.active]);
+  }, [activeId, activeAgent?.trigger?.active, activeAgentIsStreaming]);
 
   // Poll unread notification count + connectivity check
   useEffect(() => {
@@ -248,6 +345,7 @@ function App() {
 
   const handleDelete = useCallback(
     async (id: string) => {
+      stopAgentStream(id, false);
       // Optimistic: remove from UI immediately
       const prevAgents = agents;
       setAgents((prev) => prev.filter((a) => a.id !== id));
@@ -265,48 +363,22 @@ function App() {
         console.error(e);
       }
     },
-    [activeId, agents]
+    [activeId, agents, stopAgentStream]
   );
 
   const handleStop = useCallback(() => {
-    if (abortRef.current) {
-      abortRef.current.abort();
-      abortRef.current = null;
-    }
-    // Commit whatever has streamed so far as an assistant message
-    const agentId = streamingAgentId;
-    if (agentId) {
-      const partial = streamingContent || "";
-      const steps = streamingToolStepsRef.current;
-      if (partial || steps.length > 0) {
-        const assistantMsg: Message = {
-          role: "assistant",
-          content: partial + "\n\n*(generation stopped)*",
-          created_at: new Date().toISOString(),
-        };
-        if (steps.length > 0) {
-          assistantMsg.toolSteps = [...steps];
-        }
-        setMessagesCache((prev) => ({
-          ...prev,
-          [agentId]: [...(prev[agentId] || []), assistantMsg],
-        }));
-      }
-    }
-    setStreamingContent("");
-    setStreamingToolSteps([]);
-    streamingToolStepsRef.current = [];
-    setIsStreaming(false);
-    setStreamingAgentId(null);
-    setStreamingImages([]);
-  }, [streamingAgentId, streamingContent]);
+    if (!activeId) return;
+    stopAgentStream(activeId, true);
+  }, [activeId, stopAgentStream]);
 
   const handleSend = useCallback(
     async (content: string, images?: Array<{ data: string; media_type: string }>) => {
       if (!activeId) return;
-      // If already streaming, abort the current one first
-      if (isStreaming) {
-        handleStop();
+      const agentId = activeId;
+
+      // If this agent is already streaming, stop its current response first.
+      if (streamingStatesRef.current[agentId]?.isStreaming) {
+        stopAgentStream(agentId, true);
       }
 
       const userMsg: Message = { role: "user", content, created_at: new Date().toISOString() };
@@ -315,36 +387,43 @@ function App() {
       }
       setMessagesCache((prev) => ({
         ...prev,
-        [activeId]: [...(prev[activeId] || []), userMsg],
+        [agentId]: [...(prev[agentId] || []), userMsg],
       }));
-      setIsStreaming(true);
-      setStreamingAgentId(activeId);
-      setStreamingContent("");
-      setStreamingToolSteps([]);
-      setStreamingTodos([]);
-      setStreamingImages([]);
+
+      setAgentStreamState(agentId, () => ({
+        isStreaming: true,
+        content: "",
+        toolSteps: [],
+        todos: [],
+        images: [],
+      }));
 
       const controller = new AbortController();
-      abortRef.current = controller;
-      const agentId = activeId;
+      abortControllersRef.current[agentId] = controller;
+      const isCurrentRun = () => abortControllersRef.current[agentId] === controller && !controller.signal.aborted;
 
       // If the thread is busy (trigger running), wait for it to finish
       // before sending the user message. Show a "waiting" delta.
       try {
-        let busy = await checkAgentBusy(agentId);
-        if (busy) {
-          setStreamingContent("Waiting for a running trigger to finish...\n");
+        let busyState = await checkAgentBusy(agentId);
+        if (busyState.busy) {
+          setAgentStreamState(agentId, (prev) => ({
+            ...prev,
+            isStreaming: true,
+            content: busyState.reason === "trigger"
+              ? "Waiting for the running trigger to finish...\n"
+              : "Waiting for the current run to finish...\n",
+          }));
           const waitStart = Date.now();
           const MAX_WAIT = 60_000; // 60 seconds max
-          while (busy && Date.now() - waitStart < MAX_WAIT) {
+          while (busyState.busy && Date.now() - waitStart < MAX_WAIT) {
             await new Promise((r) => setTimeout(r, 2_000));
             if (controller.signal.aborted) break;
-            busy = await checkAgentBusy(agentId);
+            busyState = await checkAgentBusy(agentId);
           }
-          setStreamingContent("");
+          if (!isCurrentRun()) return;
+          setAgentStreamState(agentId, (prev) => ({ ...prev, isStreaming: true, content: "" }));
           if (controller.signal.aborted) {
-            setIsStreaming(false);
-            setStreamingAgentId(null);
             return;
           }
         }
@@ -357,38 +436,40 @@ function App() {
           agentId,
           content,
           (delta) => {
-            setStreamingContent((prev) => prev + delta);
+            if (!isCurrentRun()) return;
+            setAgentStreamState(agentId, (prev) => ({
+              ...prev,
+              isStreaming: true,
+              content: prev.content + delta,
+            }));
           },
           (fullText) => {
+            if (!isCurrentRun()) return;
+            const state = streamingStatesRef.current[agentId] ?? EMPTY_STREAM_STATE;
             const assistantMsg: Message = {
               role: "assistant",
-              content: fullText,
+              content: fullText || state.content,
               created_at: new Date().toISOString(),
             };
-            const steps = streamingToolStepsRef.current;
-            if (steps.length > 0) {
-              assistantMsg.toolSteps = [...steps];
+            if (state.toolSteps.length > 0) {
+              assistantMsg.toolSteps = [...state.toolSteps];
             }
-            setStreamingImages((imgs) => {
-              if (imgs.length > 0) assistantMsg.images = [...imgs];
-              return [];
-            });
+            if (state.images.length > 0) {
+              assistantMsg.images = [...state.images];
+            }
             setMessagesCache((prev) => ({
               ...prev,
               [agentId]: [...(prev[agentId] || []), assistantMsg],
             }));
-            setStreamingToolSteps([]);
-            streamingToolStepsRef.current = [];
-            setStreamingContent("");
-            setIsStreaming(false);
-            setStreamingAgentId(null);
-            setStreamingTodos([]);
+            delete abortControllersRef.current[agentId];
+            clearAgentStreamState(agentId);
             // Refresh agent data (trigger may have been modified by the agent)
             refreshAgent(agentId);
             // Delayed refresh to pick up background auto-naming
             setTimeout(() => refreshAgent(agentId), 3000);
           },
           (error) => {
+            if (!isCurrentRun()) return;
             console.error("Stream error:", error);
             const errorMsg: Message = {
               role: "assistant",
@@ -399,40 +480,38 @@ function App() {
               ...prev,
               [agentId]: [...(prev[agentId] || []), errorMsg],
             }));
-            setStreamingContent("");
-            setIsStreaming(false);
-            setStreamingAgentId(null);
-            setStreamingToolSteps([]);
-            streamingToolStepsRef.current = [];
-            setStreamingTodos([]);
-            setStreamingImages([]);
+            delete abortControllersRef.current[agentId];
+            clearAgentStreamState(agentId);
           },
           controller.signal,
           () => refreshAgent(agentId),
           (step: ToolStep) => {
-            streamingToolStepsRef.current = [...streamingToolStepsRef.current, step];
-            setStreamingToolSteps((prev) => [...prev, step]);
+            if (!isCurrentRun()) return;
+            setAgentStreamState(agentId, (prev) => ({
+              ...prev,
+              isStreaming: true,
+              toolSteps: [...prev.toolSteps, step],
+            }));
           },
           (name: string, result: Record<string, unknown>) => {
-            streamingToolStepsRef.current = streamingToolStepsRef.current.map((s) =>
-              s.name === name && s.status === "running"
-                ? { ...s, result, status: result.success === false ? "error" : ("completed" as const) }
-                : s
-            );
-            setStreamingToolSteps((prev) =>
-              prev.map((s) =>
+            if (!isCurrentRun()) return;
+            setAgentStreamState(agentId, (prev) => ({
+              ...prev,
+              isStreaming: true,
+              toolSteps: prev.toolSteps.map((s) =>
                 s.name === name && s.status === "running"
                   ? { ...s, result, status: result.success === false ? "error" : ("completed" as const) }
                   : s
-              )
-            );
-            // Track todo list updates
-            if ((name === "create_todo_list" || name === "update_todo_status") && Array.isArray(result.todos)) {
-              setStreamingTodos(result.todos as TodoItem[]);
-            }
+              ),
+              todos:
+                (name === "create_todo_list" || name === "update_todo_status") && Array.isArray(result.todos)
+                  ? (result.todos as TodoItem[])
+                  : prev.todos,
+            }));
           },
           // onNameUpdate — auto-generated agent name
           (newName: string) => {
+            if (!isCurrentRun()) return;
             setAgents((prev) =>
               prev.map((a) => (a.id === agentId ? { ...a, name: newName } : a))
             );
@@ -440,20 +519,21 @@ function App() {
           images,
           // onImage — tool-captured image (e.g. Twitch)
           (img: { data: string; media_type: string }) => {
-            setStreamingImages((prev) => [...prev, img]);
+            if (!isCurrentRun()) return;
+            setAgentStreamState(agentId, (prev) => ({
+              ...prev,
+              isStreaming: true,
+              images: [...prev.images, img],
+            }));
           },
         );
       } catch {
-        setIsStreaming(false);
-        setStreamingAgentId(null);
-        setStreamingContent("");
-        setStreamingToolSteps([]);
-        streamingToolStepsRef.current = [];
-        setStreamingTodos([]);
-        setStreamingImages([]);
+        if (!isCurrentRun()) return;
+        delete abortControllersRef.current[agentId];
+        clearAgentStreamState(agentId);
       }
     },
-    [activeId, isStreaming, handleStop, refreshAgent]
+    [activeId, clearAgentStreamState, refreshAgent, setAgentStreamState, stopAgentStream]
   );
 
   // When switching agents, update selected model to match the agent
@@ -762,6 +842,7 @@ function App() {
       <Sidebar
         agents={agents}
         activeId={activeId}
+        streamingAgentIds={streamingAgentIds}
         onSelect={handleSelect}
         onNew={handleNewAgent}
         onDelete={handleDelete}
@@ -772,11 +853,11 @@ function App() {
       <ChatView
         messages={currentMessages}
         messagesLoading={messagesLoading}
-        streamingContent={activeId === streamingAgentId ? streamingContent : ""}
-        streamingToolSteps={activeId === streamingAgentId ? streamingToolSteps : []}
-        streamingTodos={activeId === streamingAgentId ? streamingTodos : []}
-        streamingImages={activeId === streamingAgentId ? streamingImages : []}
-        isStreaming={isStreaming && activeId === streamingAgentId}
+        streamingContent={activeStreamState.content}
+        streamingToolSteps={activeStreamState.toolSteps}
+        streamingTodos={activeStreamState.todos}
+        streamingImages={activeStreamState.images}
+        isStreaming={activeAgentIsStreaming}
         onSend={handleSend}
         onStop={handleStop}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
@@ -791,7 +872,8 @@ function App() {
         onToolsChange={handleToolsChange}
         toolLibrary={toolLibrary}
         mcpServers={mcpServers}
-        agentBusy={agentBusy}
+        agentBusy={agentBusy.busy}
+        agentBusyReason={agentBusy.reason}
         emailAccounts={emailAccounts}
         onEmailAccountChange={handleEmailAccountChange}
         onNewAgentWithPrompt={handleNewAgentWithPrompt}

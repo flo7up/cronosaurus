@@ -3,6 +3,7 @@ import type { Agent } from "../types/chat";
 interface SidebarProps {
   agents: Agent[];
   activeId: string | null;
+  streamingAgentIds: string[];
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
@@ -14,6 +15,7 @@ interface SidebarProps {
 export default function Sidebar({
   agents,
   activeId,
+  streamingAgentIds,
   onSelect,
   onNew,
   onDelete,
@@ -77,6 +79,7 @@ export default function Sidebar({
           {sortedAgents.map((agent) => {
             const hasTrigger = !!agent.trigger;
             const hasActiveTrigger = agent.trigger?.active ?? false;
+            const isStreaming = streamingAgentIds.includes(agent.id);
 
             return (
               <div
@@ -87,6 +90,8 @@ export default function Sidebar({
                   ${
                     activeId === agent.id
                       ? "bg-[#0e1922] text-[#b0f0e8] border border-teal-200/10"
+                      : isStreaming
+                        ? "text-[#ffcf67] hover:bg-[#1a160d]/85 hover:text-[#ffe5a8] border border-[#ffcf67]/20 shadow-[0_0_18px_rgba(255,207,103,0.08)]"
                       : hasActiveTrigger
                         ? "text-[#5eebd8] hover:bg-[#0a1a22]/85 hover:text-[#b0f0e8] border border-teal-400/20 animate-[glow_2s_ease-in-out_infinite]"
                         : "text-[#78adb8] hover:bg-[#0f161b]/75 hover:text-[#c9f6ef]"
@@ -99,7 +104,11 @@ export default function Sidebar({
                   <span className="relative shrink-0">
                     <svg
                       className={`w-4 h-4 ${
-                        hasActiveTrigger ? "text-teal-400 animate-[spin_3s_linear_infinite]" : "text-gray-600"
+                        isStreaming
+                          ? "text-[#ffcf67] animate-pulse"
+                          : hasActiveTrigger
+                            ? "text-teal-400 animate-[spin_3s_linear_infinite]"
+                            : "text-gray-600"
                       }`}
                       fill="none"
                       stroke="currentColor"
@@ -112,13 +121,15 @@ export default function Sidebar({
                         d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                       />
                     </svg>
-                    {hasActiveTrigger && (
-                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-teal-400 rounded-full animate-pulse" />
+                    {(hasActiveTrigger || isStreaming) && (
+                      <span className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full animate-pulse ${
+                        isStreaming ? "bg-[#ffcf67]" : "bg-teal-400"
+                      }`} />
                     )}
                   </span>
                 ) : (
                   <svg
-                    className="w-4 h-4 shrink-0"
+                    className={`w-4 h-4 shrink-0 ${isStreaming ? "text-[#ffcf67] animate-pulse" : ""}`}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -132,7 +143,11 @@ export default function Sidebar({
                   </svg>
                 )}
                 <span className="truncate flex-1">{agent.name}</span>
-                {hasActiveTrigger && agent.trigger && (
+                {isStreaming ? (
+                  <span className="terminal-chip shrink-0 bg-[#23190a] text-[10px] text-[#ffcf67] border-[#ffcf67]/25 px-1.5 py-0.5">
+                    live
+                  </span>
+                ) : hasActiveTrigger && agent.trigger ? (
                   <span className="flex items-center gap-1 text-[10px] text-teal-400/80 shrink-0 bg-teal-900/30 px-1.5 py-0.5 rounded-full">
                     <svg
                       className="w-2.5 h-2.5"
@@ -149,7 +164,7 @@ export default function Sidebar({
                     </svg>
                     {agent.trigger.interval_minutes}m
                   </span>
-                )}
+                ) : null}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import ToggleSwitch from "./ToggleSwitch";
 import type {
   Agent,
   MCPServer,
@@ -396,17 +397,11 @@ function ToolRow({ tool, onToggle }: { tool: ToolCatalogEntry; onToggle: () => v
         </div>
         <div className="text-xs text-[#486d78] mt-0.5">{tool.description}</div>
       </div>
-      <div
-        className={`w-9 h-5 transition-colors relative flex-shrink-0 rounded-full ${
-          tool.in_library ? "bg-teal-600" : "bg-gray-600"
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-            tool.in_library ? "left-[18px]" : "left-0.5"
-          }`}
-        />
-      </div>
+      <ToggleSwitch
+        checked={tool.in_library}
+        accent="teal"
+        className="pointer-events-none"
+      />
     </button>
   );
 }
@@ -821,16 +816,13 @@ function TriggersTab({
                     }`}>
                       {t.active ? "Active" : "Paused"}
                     </span>
-                    <button
-                      onClick={() => onToggleAnyTrigger(agent.id, !t.active)}
-                      className={`relative w-8 h-4 rounded-full transition-colors ${
-                        t.active ? "bg-green-600" : "bg-gray-600"
-                      }`}
-                    >
-                      <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
-                        t.active ? "left-[14px]" : "left-0.5"
-                      }`} />
-                    </button>
+                    <ToggleSwitch
+                      checked={t.active}
+                      onToggle={() => onToggleAnyTrigger(agent.id, !t.active)}
+                      accent="green"
+                      size="sm"
+                      title={t.active ? "Pause trigger" : "Activate trigger"}
+                    />
                   </div>
                 </div>
 
@@ -974,16 +966,12 @@ function TriggersTab({
                 }`}>
                   {trigger.active ? "Active" : "Paused"}
                 </span>
-                <button
-                  onClick={() => onToggle(!trigger.active)}
-                  className={`relative w-9 h-5 rounded-full transition-colors ${
-                    trigger.active ? "bg-green-600" : "bg-gray-600"
-                  }`}
-                >
-                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                    trigger.active ? "left-[18px]" : "left-0.5"
-                  }`} />
-                </button>
+                <ToggleSwitch
+                  checked={trigger.active}
+                  onToggle={() => onToggle(!trigger.active)}
+                  accent="green"
+                  title={trigger.active ? "Pause trigger" : "Activate trigger"}
+                />
               </div>
             </div>
 
@@ -1826,23 +1814,21 @@ function EmailTab({
         {/* TLS + Default */}
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setForm({ ...form, use_tls: !form.use_tls })}
-              className={`relative w-9 h-5 rounded-full transition-colors ${form.use_tls ? "bg-green-600" : "bg-gray-600"}`}
-            >
-              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${form.use_tls ? "left-[18px]" : "left-0.5"}`} />
-            </button>
+            <ToggleSwitch
+              checked={form.use_tls}
+              onToggle={() => setForm({ ...form, use_tls: !form.use_tls })}
+              accent="green"
+              title={form.use_tls ? "Disable TLS" : "Enable TLS"}
+            />
             <span className="text-sm text-gray-300">Use TLS</span>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setForm({ ...form, is_default: !form.is_default })}
-              className={`relative w-9 h-5 rounded-full transition-colors ${form.is_default ? "bg-blue-600" : "bg-gray-600"}`}
-            >
-              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${form.is_default ? "left-[18px]" : "left-0.5"}`} />
-            </button>
+            <ToggleSwitch
+              checked={form.is_default}
+              onToggle={() => setForm({ ...form, is_default: !form.is_default })}
+              accent="blue"
+              title={form.is_default ? "Unset as default account" : "Set as default account"}
+            />
             <span className="text-sm text-gray-300">Default account</span>
           </div>
         </div>
@@ -2005,15 +1991,12 @@ function MCPTab({
               {srv.description && <p className="text-xs text-gray-500 mt-1">{srv.description}</p>}
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              <button
-                onClick={() => onToggle(srv.id, !srv.active)}
-                className={`relative w-9 h-5 rounded-full transition-colors ${srv.active ? "bg-green-600" : "bg-gray-600"}`}
+              <ToggleSwitch
+                checked={srv.active}
+                onToggle={() => onToggle(srv.id, !srv.active)}
+                accent="green"
                 title={srv.active ? "Deactivate" : "Activate"}
-              >
-                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                  srv.active ? "left-[18px]" : "left-0.5"
-                }`} />
-              </button>
+              />
               <button onClick={() => startEdit(srv)} className="p-1.5 text-gray-400 hover:text-blue-400 transition-colors" title="Edit">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -2986,19 +2969,13 @@ function NotificationsTab() {
                     "Test"
                   )}
                 </button>
-                <button
-                  onClick={() => handleToggleChannel(ch.id, !ch.enabled)}
-                  className={`w-8 h-4 rounded-full transition-colors relative ${
-                    ch.enabled ? "bg-green-600/40" : "bg-gray-700"
-                  }`}
-                  title={ch.enabled ? "Disable" : "Enable"}
-                >
-                  <div
-                    className={`absolute top-0.5 w-3 h-3 rounded-full transition-all ${
-                      ch.enabled ? "right-0.5 bg-green-400" : "left-0.5 bg-gray-500"
-                    }`}
-                  />
-                </button>
+                <ToggleSwitch
+                  checked={ch.enabled}
+                  onToggle={() => handleToggleChannel(ch.id, !ch.enabled)}
+                  accent="green"
+                  size="sm"
+                  title={ch.enabled ? "Disable channel" : "Enable channel"}
+                />
                 <button
                   onClick={() => handleDeleteChannel(ch.id)}
                   className="p-0.5 text-gray-500 hover:text-red-400 transition-colors"

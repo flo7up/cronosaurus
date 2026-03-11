@@ -25,11 +25,13 @@ async def list_notifications(limit: int = 50, unread_only: bool = False):
             user_id=n["user_id"],
             title=n["title"],
             body=n["body"],
+            content=n.get("content", ""),
             level=n.get("level", "info"),
             agent_id=n.get("agent_id"),
             agent_name=n.get("agent_name"),
             read=n.get("read", False),
             created_at=n["created_at"],
+            images=n.get("images"),
         )
         for n in items
     ]

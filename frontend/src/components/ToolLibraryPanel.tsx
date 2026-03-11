@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { ToolCatalogEntry, EmailAccount } from "../types/chat";
 import { fetchToolCatalog, updateToolLibrary, batchUpdateToolLibrary } from "../api/user";
+import ToggleSwitch from "./ToggleSwitch";
 
 interface ToolLibraryPanelProps {
   onClose: () => void;
@@ -361,17 +362,7 @@ function ToolRow({
           onClick={onToggle}
           className="flex-shrink-0"
         >
-          <div
-            className={`w-9 h-5 rounded-full transition-colors relative ${
-              tool.in_library ? "bg-purple-600" : "bg-gray-700 border border-gray-600"
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                tool.in_library ? "left-[18px]" : "left-0.5"
-              }`}
-            />
-          </div>
+          <ToggleSwitch checked={tool.in_library} accent="purple" className="pointer-events-none" />
         </button>
       </div>
 

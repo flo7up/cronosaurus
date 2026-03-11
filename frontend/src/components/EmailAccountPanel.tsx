@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { EmailAccount, EmailAccountCreate } from "../types/chat";
+import ToggleSwitch from "./ToggleSwitch";
 
 interface EmailAccountPanelProps {
   accounts: EmailAccount[];
@@ -473,35 +474,21 @@ export default function EmailAccountPanel({
             {/* TLS + Default toggles */}
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, use_tls: !form.use_tls })}
-                  className={`relative w-9 h-5 rounded-full transition-colors ${
-                    form.use_tls ? "bg-green-600" : "bg-gray-600"
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                      form.use_tls ? "left-[18px]" : "left-0.5"
-                    }`}
-                  />
-                </button>
+                <ToggleSwitch
+                  checked={form.use_tls}
+                  onToggle={() => setForm({ ...form, use_tls: !form.use_tls })}
+                  accent="green"
+                  title={form.use_tls ? "Disable TLS" : "Enable TLS"}
+                />
                 <span className="text-sm text-gray-300">Use TLS</span>
               </div>
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, is_default: !form.is_default })}
-                  className={`relative w-9 h-5 rounded-full transition-colors ${
-                    form.is_default ? "bg-blue-600" : "bg-gray-600"
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                      form.is_default ? "left-[18px]" : "left-0.5"
-                    }`}
-                  />
-                </button>
+                <ToggleSwitch
+                  checked={form.is_default}
+                  onToggle={() => setForm({ ...form, is_default: !form.is_default })}
+                  accent="blue"
+                  title={form.is_default ? "Unset as default account" : "Set as default account"}
+                />
                 <span className="text-sm text-gray-300">Default account</span>
               </div>
             </div>

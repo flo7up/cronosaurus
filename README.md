@@ -43,6 +43,19 @@ Create autonomous AI agents with a rich tool ecosystem, schedule recurring tasks
 |:---:|:---:|:---:|
 | ![Tool Management](docs/images/tool-management.png) | ![Self Tool Activation](docs/images/self-tool-activation.png) | ![Agent-to-Agent Collaboration](docs/images/agent-to-agents.png) |
 
+## Demo Video
+
+<p align="center">
+  <video controls muted playsinline width="960">
+    <source src="docs/videos/sample%20video%20twitch%20monitoring.mp4" type="video/mp4" />
+    Your browser does not support embedded video playback.
+  </video>
+</p>
+
+<p align="center">
+  <a href="docs/videos/sample%20video%20twitch%20monitoring.mp4">Open the demo video directly</a>
+</p>
+
 ## Architecture
 
 ```

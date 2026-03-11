@@ -253,7 +253,6 @@ export default function NotificationPanel({
                 const cfg = LEVEL_CONFIG[n.level] || LEVEL_CONFIG.info;
                 const isExpanded = expandedId === n.id;
                 const hasContent = !!(n.content && n.content !== n.body);
-                const hasImages = !!(n.images && n.images.length > 0);
                 return (
                   <div
                     key={n.id}

@@ -271,26 +271,41 @@ def _send_smtp(
 
         if is_html:
             if images:
-                # Use "related" so inline CID images render properly
-                msg = MIMEMultipart("related")
+                # Use mixed > related > alternative structure so images
+                # appear both inline in HTML and as downloadable attachments.
+                import base64
+                from email.mime.image import MIMEImage
+
+                msg = MIMEMultipart("mixed")
+                related_part = MIMEMultipart("related")
                 alt_part = MIMEMultipart("alternative")
                 alt_part.attach(MIMEText(body, "plain", charset))
                 alt_part.attach(MIMEText(body, "html", charset))
-                msg.attach(alt_part)
-                # Attach images as inline CID parts
-                import base64
-                from email.mime.image import MIMEImage
+                related_part.attach(alt_part)
+
                 for i, img in enumerate(images):
                     raw_b64 = img["data"]
-                    # Fix padding if needed
                     raw_b64 += "=" * (-len(raw_b64) % 4)
                     img_data = base64.b64decode(raw_b64)
                     media_type = img.get("media_type", "image/jpeg")
                     subtype = media_type.split("/")[-1] if "/" in media_type else "jpeg"
-                    mime_img = MIMEImage(img_data, _subtype=subtype)
-                    mime_img.add_header("Content-ID", f"<notif_img_{i}>")
-                    mime_img.add_header("Content-Disposition", "inline", filename=f"image_{i}.{subtype}")
-                    msg.attach(mime_img)
+                    filename = f"image_{i}.{subtype}"
+                    cid = f"notif_img_{i}"
+
+                    # Inline part (for CID references in HTML body)
+                    inline_img = MIMEImage(img_data, _subtype=subtype)
+                    inline_img.add_header("Content-ID", f"<{cid}>")
+                    inline_img.add_header("Content-Disposition", "inline", filename=filename)
+                    inline_img.add_header("X-Attachment-Id", cid)
+                    related_part.attach(inline_img)
+
+                    # Attachment part (shows as downloadable attachment)
+                    attach_img = MIMEImage(img_data, _subtype=subtype)
+                    attach_img.add_header("Content-Disposition", "attachment", filename=filename)
+                    msg.attach(attach_img)
+
+                # Insert the related part (HTML + inline images) before attachments
+                msg._payload.insert(0, related_part)
             else:
                 msg = MIMEMultipart("alternative")
                 msg.attach(MIMEText(body, "plain", charset))

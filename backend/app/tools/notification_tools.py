@@ -128,17 +128,38 @@ def execute_notification_tool(
     image_media_type = arguments.get("image_media_type", "image/jpeg")
     agent_chosen_group_id = arguments.get("distribution_group_id", "")
 
-    # If no explicit image param, try the thread image cache
-    # This automatically includes images from tool results (e.g. Twitch captures)
+    # Resolve images: prefer thread cache (has real user-pasted /
+    # tool-captured images), fall back to LLM-provided base64 only when
+    # the cache is empty and the base64 looks valid.
     images: list[dict] | None = None
-    if image_base64:
-        images = [{"data": image_base64, "media_type": image_media_type}]
-    elif thread_id:
+
+    # 1. Try thread image cache first (most reliable source)
+    if thread_id:
         from app.services.agent_service import _thread_images, _thread_images_lock
         with _thread_images_lock:
             cached = _thread_images.get(thread_id, [])
             if cached:
                 images = [{"data": img["data"], "media_type": img.get("media_type", "image/jpeg")} for img in cached]
+                logger.info("send_notification: using %d cached image(s) from thread %s", len(images), thread_id)
+
+    # 2. Fall back to LLM-provided base64 (only if cache was empty)
+    if images is None and image_base64:
+        import base64 as _b64
+        try:
+            padded = image_base64 + "=" * (-len(image_base64) % 4)
+            raw = _b64.b64decode(padded, validate=True)
+            if len(raw) > 500:  # Real images are at least a few hundred bytes
+                images = [{"data": image_base64, "media_type": image_media_type}]
+                logger.info("send_notification: using LLM-provided image_base64 (%d bytes)", len(raw))
+            else:
+                logger.debug("send_notification: image_base64 too small (%d bytes), ignoring", len(raw))
+        except Exception:
+            logger.debug("send_notification: image_base64 is invalid base64, ignoring")
+
+    if images:
+        logger.info("send_notification: %d image(s) will be attached", len(images))
+    else:
+        logger.info("send_notification: no images to attach (thread_id=%s)", thread_id)
 
     if not title or not body:
         return {"success": False, "error": "title and body are required"}

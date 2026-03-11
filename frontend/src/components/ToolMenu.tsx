@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import ToggleSwitch from "./ToggleSwitch";
 import type { MCPServer, ToolPreference } from "../types/chat";
 
 /** Built-in tools that always appear in the menu */
@@ -162,17 +163,12 @@ export default function ToolMenu({
                     <p className="text-[11px] text-gray-500 truncate">{tool.description}</p>
                   </div>
                   {/* Toggle switch */}
-                  <div
-                    className={`relative w-8 h-[18px] rounded-full shrink-0 transition-colors ${
-                      enabled ? "bg-purple-600" : "bg-gray-600"
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform ${
-                        enabled ? "left-[14px]" : "left-[2px]"
-                      }`}
-                    />
-                  </div>
+                  <ToggleSwitch
+                    checked={enabled}
+                    accent="purple"
+                    size="sm"
+                    className="shrink-0 pointer-events-none"
+                  />
                 </button>
               );
             })}
@@ -248,17 +244,12 @@ export default function ToolMenu({
                       </div>
                       {/* Toggle switch */}
                       {srv.active ? (
-                        <div
-                          className={`relative w-8 h-[18px] rounded-full shrink-0 transition-colors ${
-                            enabled ? "bg-green-600" : "bg-gray-600"
-                          }`}
-                        >
-                          <span
-                            className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform ${
-                              enabled ? "left-[14px]" : "left-[2px]"
-                            }`}
-                          />
-                        </div>
+                        <ToggleSwitch
+                          checked={enabled}
+                          accent="green"
+                          size="sm"
+                          className="shrink-0 pointer-events-none"
+                        />
                       ) : (
                         <span className="text-[10px] text-gray-600 shrink-0">Inactive</span>
                       )}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { AgentTrigger } from "../types/chat";
+import ToggleSwitch from "./ToggleSwitch";
 
 interface TriggerPanelProps {
   trigger: AgentTrigger | null;
@@ -203,18 +204,12 @@ export default function TriggerPanel({
                     >
                       {trigger.active ? "Active" : "Paused"}
                     </span>
-                    <button
-                      onClick={() => onToggle(!trigger.active)}
-                      className={`relative w-9 h-5 rounded-full transition-colors ${
-                        trigger.active ? "bg-green-600" : "bg-gray-600"
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                          trigger.active ? "left-[18px]" : "left-0.5"
-                        }`}
-                      />
-                    </button>
+                    <ToggleSwitch
+                      checked={trigger.active}
+                      onToggle={() => onToggle(!trigger.active)}
+                      accent="green"
+                      title={trigger.active ? "Pause trigger" : "Activate trigger"}
+                    />
                   </div>
                 </div>
 

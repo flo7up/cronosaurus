@@ -246,16 +246,20 @@ class GmailPushService:
             )
 
             try:
-                result = agent_service.run_non_streaming(
-                    agent_id=agent_id,
-                    foundry_agent_id=foundry_agent_id,
-                    thread_id=thread_id,
-                    model=model,
-                    content=email_context,
-                    tools=agent_tools,
-                    provider=provider,
-                    custom_instructions=agent_doc.get("custom_instructions", ""),
-                )
+                agent_service.mark_trigger_run_start(agent_id)
+                try:
+                    result = agent_service.run_non_streaming(
+                        agent_id=agent_id,
+                        foundry_agent_id=foundry_agent_id,
+                        thread_id=thread_id,
+                        model=model,
+                        content=email_context,
+                        tools=agent_tools,
+                        provider=provider,
+                        custom_instructions=agent_doc.get("custom_instructions", ""),
+                    )
+                finally:
+                    agent_service.mark_trigger_run_end(agent_id)
                 processed_count += 1
                 logger.info(
                     "Agent %s gmail push complete for UID %d: %d chars",

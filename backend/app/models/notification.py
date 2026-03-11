@@ -19,6 +19,12 @@ class NotificationCreate(BaseModel):
     agent_name: Optional[str] = None
 
 
+class NotificationImage(BaseModel):
+    """An inline image attached to a notification."""
+    data: str
+    media_type: str = "image/jpeg"
+
+
 class NotificationResponse(BaseModel):
     """Notification returned from the API."""
     id: str
@@ -31,6 +37,7 @@ class NotificationResponse(BaseModel):
     agent_name: Optional[str] = None
     read: bool = False
     created_at: str  # ISO-8601
+    images: Optional[list[NotificationImage]] = None
 
 
 class NotificationPreferences(BaseModel):

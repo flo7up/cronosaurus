@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { MCPServer } from "../types/chat";
+import ToggleSwitch from "./ToggleSwitch";
 
 interface MCPServerPanelProps {
   servers: MCPServer[];
@@ -124,19 +125,12 @@ export default function MCPServerPanel({
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {/* Toggle */}
-                  <button
-                    onClick={() => onToggle(srv.id, !srv.active)}
-                    className={`relative w-9 h-5 rounded-full transition-colors ${
-                      srv.active ? "bg-green-600" : "bg-gray-600"
-                    }`}
+                  <ToggleSwitch
+                    checked={srv.active}
+                    onToggle={() => onToggle(srv.id, !srv.active)}
+                    accent="green"
                     title={srv.active ? "Deactivate" : "Activate"}
-                  >
-                    <span
-                      className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                        srv.active ? "left-[18px]" : "left-0.5"
-                      }`}
-                    />
-                  </button>
+                  />
                   {/* Edit */}
                   <button
                     onClick={() => startEdit(srv)}

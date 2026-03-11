@@ -2,6 +2,11 @@ import type { Agent, AgentTrigger, Message, SSEEvent, ToolStep } from "../types/
 
 const BASE = "/api/agents";
 
+export type AgentBusyState = {
+  busy: boolean;
+  reason: "trigger" | "run" | null;
+};
+
 // ── Status & models ───────────────────────────────────────────
 
 export async function checkStatus(): Promise<{ ready: boolean }> {
@@ -193,14 +198,15 @@ export async function sendMessageStream(
 
 export async function checkAgentBusy(
   agentId: string
-): Promise<boolean> {
+): Promise<AgentBusyState> {
   try {
     const res = await fetch(`${BASE}/${agentId}/busy`);
-    if (!res.ok) return false;
+    if (!res.ok) return { busy: false, reason: null };
     const data = await res.json();
-    return data.busy === true;
+    const reason = data.reason === "trigger" || data.reason === "run" ? data.reason : null;
+    return { busy: data.busy === true, reason };
   } catch {
-    return false;
+    return { busy: false, reason: null };
   }
 }
 

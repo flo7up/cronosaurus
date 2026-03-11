@@ -705,6 +705,8 @@ class AgentService:
         self._initialized = False
         self._thread_locks: dict[str, threading.Lock] = {}  # thread_id → Lock
         self._thread_locks_lock = threading.Lock()  # protects _thread_locks dict
+        self._trigger_runs: dict[str, int] = {}  # agent_id → active automated trigger runs
+        self._trigger_runs_lock = threading.Lock()
 
     @property
     def provider(self) -> str:
@@ -717,6 +719,33 @@ class AgentService:
         self.client = None
         self._foundry_agents.clear()
         self._initialized = False
+        with self._trigger_runs_lock:
+            self._trigger_runs.clear()
+
+    def mark_trigger_run_start(self, agent_id: str):
+        """Mark an automated trigger run as active for the agent."""
+        if not agent_id:
+            return
+        with self._trigger_runs_lock:
+            self._trigger_runs[agent_id] = self._trigger_runs.get(agent_id, 0) + 1
+
+    def mark_trigger_run_end(self, agent_id: str):
+        """Clear one active automated trigger run for the agent."""
+        if not agent_id:
+            return
+        with self._trigger_runs_lock:
+            current = self._trigger_runs.get(agent_id, 0)
+            if current <= 1:
+                self._trigger_runs.pop(agent_id, None)
+            else:
+                self._trigger_runs[agent_id] = current - 1
+
+    def is_trigger_run_active(self, agent_id: str) -> bool:
+        """Return True when the agent is currently processing an automated trigger."""
+        if not agent_id:
+            return False
+        with self._trigger_runs_lock:
+            return self._trigger_runs.get(agent_id, 0) > 0
 
     def initialize(self):
         """Connect to Foundry (if configured). Called once on app startup."""
@@ -1703,6 +1732,13 @@ class AgentService:
                 user_img_list = [{"data": img["data"], "media_type": img["media_type"]} for img in images]
                 message_store.store_message(thread_id, "user", content, images=user_img_list)
 
+            # Cache images so notification tool can access them during this turn
+            if images:
+                with _thread_images_lock:
+                    _thread_images[thread_id] = [
+                        {"data": img["data"], "media_type": img["media_type"]} for img in images
+                    ]
+
             # Post user message with retry on active-run conflict
             for _attempt in range(3):
                 try:
@@ -2223,6 +2259,13 @@ class AgentService:
                 from app.services.message_store import message_store
                 user_img_list = [{"data": img["data"], "media_type": img["media_type"]} for img in images]
                 message_store.store_message(thread_id, "user", content, images=user_img_list)
+
+            # Cache images so notification tool can access them during this turn
+            if images:
+                with _thread_images_lock:
+                    _thread_images[thread_id] = [
+                        {"data": img["data"], "media_type": img["media_type"]} for img in images
+                    ]
 
             uploaded_file_ids = self._post_user_message(
                 thread_id=thread_id,

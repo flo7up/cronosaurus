@@ -218,10 +218,13 @@ def check_busy(agent_id: str):
         raise HTTPException(404, "Agent not found")
     doc_provider = (doc.get("provider") or agent_service.provider or "azure_foundry").strip().lower()
     if doc_provider != "azure_foundry":
-        return {"busy": False}
+        return {"busy": False, "reason": None}
     thread_id = doc.get("thread_id", "")
-    busy = agent_service.is_thread_busy(thread_id) if thread_id else False
-    return {"busy": busy}
+    trigger_running = agent_service.is_trigger_run_active(agent_id)
+    thread_busy = agent_service.is_thread_busy(thread_id) if thread_id else False
+    busy = trigger_running or thread_busy
+    reason = "trigger" if trigger_running else ("run" if thread_busy else None)
+    return {"busy": busy, "reason": reason}
 
 
 # ── Messages ─────────────────────────────────────────────────────
