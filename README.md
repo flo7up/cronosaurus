@@ -47,13 +47,14 @@ Create autonomous AI agents with a rich tool ecosystem, schedule recurring tasks
 
 <p align="center">
   <video controls muted playsinline width="960">
+    <source src="https://raw.githubusercontent.com/flo7up/cronosaurus/main/docs/videos/sample%20video%20twitch%20monitoring.mp4" type="video/mp4" />
     <source src="docs/videos/sample%20video%20twitch%20monitoring.mp4" type="video/mp4" />
     Your browser does not support embedded video playback.
   </video>
 </p>
 
 <p align="center">
-  <a href="docs/videos/sample%20video%20twitch%20monitoring.mp4">Open the demo video directly</a>
+  <a href="https://raw.githubusercontent.com/flo7up/cronosaurus/main/docs/videos/sample%20video%20twitch%20monitoring.mp4">Open the demo video directly</a>
 </p>
 
 ## Architecture
