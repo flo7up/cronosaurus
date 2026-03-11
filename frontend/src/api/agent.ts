@@ -47,7 +47,7 @@ export async function getAgent(agentId: string): Promise<Agent> {
 
 export async function updateAgent(
   agentId: string,
-  data: Partial<{ name: string; model: string; tools: string[]; email_account_id: string | null; custom_instructions: string }>
+  data: Partial<{ name: string; model: string; tools: string[]; email_account_id: string | null; custom_instructions: string; notification_group_id: string | null }>
 ): Promise<Agent> {
   const res = await fetch(`${BASE}/${agentId}`, {
     method: "PATCH",

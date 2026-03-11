@@ -9,8 +9,6 @@ interface SidebarProps {
   isOpen: boolean;
   onToggle: () => void;
   onOpenSettings: () => void;
-  onOpenNotifications: () => void;
-  unreadNotifications: number;
 }
 
 export default function Sidebar({
@@ -22,8 +20,6 @@ export default function Sidebar({
   isOpen,
   onToggle,
   onOpenSettings,
-  onOpenNotifications,
-  unreadNotifications,
 }: SidebarProps) {
   // Sort: active triggers first, then the rest by created_at desc
   const sortedAgents = [...agents].sort((a, b) => {
@@ -53,8 +49,8 @@ export default function Sidebar({
         `}
       >
         {/* Header */}
-        <div className="border-b border-[#f2c230]/10 p-4">
-          <div className="terminal-titlebar mb-3 rounded-sm border border-[#f2c230]/10 bg-[#130f09] px-3 py-2 text-[10px]">root@cronosaurus : session index</div>
+        <div className="border-b border-[#3dd8c5]/10 p-4">
+          <div className="terminal-titlebar mb-3 rounded-sm border border-[#3dd8c5]/10 bg-[#090f13] px-3 py-2 text-[10px]">root@cronosaurus : session index</div>
           <button
             onClick={onNew}
             className="brand-button-primary w-full flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all"
@@ -90,10 +86,10 @@ export default function Sidebar({
                   text-sm transition-colors
                   ${
                     activeId === agent.id
-                      ? "bg-[#22190e] text-[#fff0b0] border border-amber-200/10"
+                      ? "bg-[#0e1922] text-[#b0f0e8] border border-teal-200/10"
                       : hasActiveTrigger
                         ? "text-[#e9dca6] hover:bg-[#2a1d0f]/85 hover:text-[#fff1ba] border border-amber-400/20 animate-[glow_2s_ease-in-out_infinite]"
-                        : "text-[#b8ad78] hover:bg-[#1b160f]/75 hover:text-[#f6efc9]"
+                        : "text-[#78adb8] hover:bg-[#0f161b]/75 hover:text-[#c9f6ef]"
                   }
                 `}
                 onClick={() => onSelect(agent.id)}
@@ -187,11 +183,11 @@ export default function Sidebar({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-[#f2c230]/10 space-y-2">
+        <div className="p-4 border-t border-[#3dd8c5]/10 space-y-2">
           <button
             onClick={onOpenSettings}
             className="terminal-control w-full flex items-center gap-2 px-3 py-2 rounded-lg
-              text-sm text-[#b8ad78] hover:bg-[#1b160f] hover:text-[#f8efc0] transition-colors"
+              text-sm text-[#78adb8] hover:bg-[#0f161b] hover:text-[#c0f6ef] transition-colors"
           >
             <svg
               className="w-4 h-4"
@@ -214,34 +210,9 @@ export default function Sidebar({
             </svg>
             Settings
           </button>
-          <button
-            onClick={onOpenNotifications}
-            className="terminal-control w-full flex items-center gap-2 px-3 py-2 rounded-lg
-              text-sm text-[#b8ad78] hover:bg-[#1b160f] hover:text-[#f8efc0] transition-colors"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"
-              />
-            </svg>
-            Notifications
-            {unreadNotifications > 0 && (
-              <span className="ml-auto text-xs bg-red-900/40 text-red-400 px-1.5 py-0.5 rounded-full">
-                {unreadNotifications}
-              </span>
-            )}
-          </button>
-          <div className="terminal-titlebar justify-center mt-1 rounded-sm border border-[#f2c230]/10 bg-[#130f09] px-2 py-2 opacity-80">
+          <div className="terminal-titlebar justify-center mt-1 rounded-sm border border-[#3dd8c5]/10 bg-[#090f13] px-2 py-2 opacity-80">
             <img src="/logo.png" alt="Cronosaurus" className="w-4 h-4 rounded shadow-[0_0_0_1px_rgba(242,194,48,0.18)]" />
-            <span className="text-[11px] uppercase tracking-[0.16em] text-[#b8ad78]">Cronosaurus</span>
+            <span className="text-[11px] uppercase tracking-[0.16em] text-[#78adb8]">Cronosaurus</span>
           </div>
         </div>
       </aside>

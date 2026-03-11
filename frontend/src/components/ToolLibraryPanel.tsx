@@ -307,46 +307,109 @@ function ToolRow({
   tool: ToolCatalogEntry;
   onToggle: () => void;
 }) {
+  const [showInfo, setShowInfo] = useState(false);
   const icon = TOOL_ICONS[tool.id] || (tool.category === "mcp" ? TOOL_ICONS._mcp : undefined);
   const needsConfig = tool.requires_config && !tool.available;
+  const hasFunctions = tool.tools && tool.tools.length > 0;
 
   return (
-    <button
-      onClick={onToggle}
-      className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-800/60 transition-colors"
-    >
-      <span className={tool.in_library ? "text-purple-400" : "text-gray-600"}>
-        {icon || (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M4.5 12a7.5 7.5 0 0015 0m-15 0a7.5 7.5 0 1115 0m-15 0H3m16.5 0H21" />
-          </svg>
-        )}
-      </span>
-      <div className="flex-1 text-left">
-        <div className="flex items-center gap-2">
-          <span className={`text-sm font-medium ${tool.in_library ? "text-white" : "text-gray-400"}`}>
-            {tool.label}
+    <div>
+      <div className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-800/60 transition-colors">
+        <button
+          onClick={onToggle}
+          className="flex items-center gap-3 flex-1 min-w-0"
+        >
+          <span className={tool.in_library ? "text-purple-400" : "text-gray-600"}>
+            {icon || (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M4.5 12a7.5 7.5 0 0015 0m-15 0a7.5 7.5 0 1115 0m-15 0H3m16.5 0H21" />
+              </svg>
+            )}
           </span>
-          {needsConfig && (
-            <span className="text-[10px] bg-yellow-900/40 text-yellow-400 px-1.5 py-0.5 rounded-full">
-              Needs setup
-            </span>
-          )}
+          <div className="flex-1 text-left min-w-0">
+            <div className="flex items-center gap-2">
+              <span className={`text-sm font-medium ${tool.in_library ? "text-white" : "text-gray-400"}`}>
+                {tool.label}
+              </span>
+              {needsConfig && (
+                <span className="text-[10px] bg-yellow-900/40 text-yellow-400 px-1.5 py-0.5 rounded-full">
+                  Needs setup
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-gray-500 mt-0.5">{tool.description}</div>
+          </div>
+        </button>
+        {hasFunctions && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowInfo(!showInfo); }}
+            title="View tool functions & parameters"
+            className={`p-1 rounded-md transition-colors flex-shrink-0 ${
+              showInfo
+                ? "text-purple-400 bg-purple-900/30"
+                : "text-gray-500 hover:text-gray-300 hover:bg-gray-800"
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+        )}
+        <button
+          onClick={onToggle}
+          className="flex-shrink-0"
+        >
+          <div
+            className={`w-9 h-5 rounded-full transition-colors relative ${
+              tool.in_library ? "bg-purple-600" : "bg-gray-700 border border-gray-600"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                tool.in_library ? "left-[18px]" : "left-0.5"
+              }`}
+            />
+          </div>
+        </button>
+      </div>
+
+      {/* Expanded parameter info */}
+      {showInfo && hasFunctions && (
+        <div className="mx-3 mb-2 px-3 py-2.5 rounded-lg bg-gray-800/80 border border-gray-700/50">
+          <div className="space-y-2.5">
+            {tool.tools.map((fn) => (
+              <div key={fn.name}>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-mono text-purple-300">{fn.name}</span>
+                </div>
+                {fn.parameters.length > 0 ? (
+                  <div className="mt-1 space-y-0.5">
+                    {fn.parameters.map((p) => (
+                      <div key={p.name} className="flex items-start gap-1.5 text-[11px] pl-2">
+                        <span className="font-mono text-gray-300">{p.name}</span>
+                        <span className="text-gray-600">:</span>
+                        <span className="text-blue-400">{p.type}</span>
+                        {p.required && (
+                          <span className="text-red-400 text-[9px] mt-px">*</span>
+                        )}
+                        {p.description && (
+                          <span className="text-gray-500 truncate" title={p.description}>
+                            — {p.description}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-gray-600 pl-2 mt-0.5">No parameters</div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="text-xs text-gray-500 mt-0.5">{tool.description}</div>
-      </div>
-      <div
-        className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${
-          tool.in_library ? "bg-purple-600" : "bg-gray-700 border border-gray-600"
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-            tool.in_library ? "left-[18px]" : "left-0.5"
-          }`}
-        />
-      </div>
-    </button>
+      )}
+    </div>
   );
 }

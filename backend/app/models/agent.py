@@ -12,6 +12,7 @@ class AgentCreate(BaseModel):
     tools: list[str] = Field(default_factory=lambda: ["crypto", "stock", "email_send", "email_read", "triggers", "notifications", "tool_management"])
     email_account_id: Optional[str] = None
     custom_instructions: str = ""
+    notification_group_id: Optional[str] = None  # None/"auto" = agent decides, or a specific group ID
 
 
 class AgentUpdate(BaseModel):
@@ -20,6 +21,7 @@ class AgentUpdate(BaseModel):
     tools: Optional[list[str]] = None
     email_account_id: Optional[str] = None
     custom_instructions: Optional[str] = None
+    notification_group_id: Optional[str] = None
 
 
 class AgentTriggerCreate(BaseModel):
@@ -88,6 +90,7 @@ class AgentResponse(BaseModel):
     tools: list[str]
     email_account_id: Optional[str] = None
     custom_instructions: str = ""
+    notification_group_id: Optional[str] = None
     thread_id: str
     foundry_agent_id: str = ""
     trigger: Optional[AgentTriggerResponse] = None

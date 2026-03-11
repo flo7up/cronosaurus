@@ -154,9 +154,9 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
               <div key={i} className="flex items-center gap-2">
                 <div
                   className={`w-8 h-8 flex items-center justify-center text-xs font-medium transition-colors border ${
-                    i < step ? "bg-[#152212] border-[#97ff8a]/40 text-[#97ff8a]" :
-                    i === step ? "bg-[#f2c230] border-[#f2c230] text-[#120f07]" :
-                    "bg-[#16120c] border-[#5f4c1d] text-[#8b7f59]"
+                    i < step ? "bg-[#122215] border-[#97ff8a]/40 text-[#97ff8a]" :
+                    i === step ? "bg-[#3dd8c5] border-[#3dd8c5] text-[#071210]" :
+                    "bg-[#16120c] border-[#1d4c5f] text-[#597f8b]"
                   }`}
                 >
                   {i < step ? "✓" : s.icon}
@@ -167,36 +167,36 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
               </div>
             ))}
           </div>
-          <h2 className="text-xl font-semibold text-[#fff0b0] uppercase tracking-[0.08em]">{steps[step].title}</h2>
+          <h2 className="text-xl font-semibold text-[#b0f0e8] uppercase tracking-[0.08em]">{steps[step].title}</h2>
         </div>
 
         {/* Step content */}
         <div className="px-6 pb-6 min-h-[320px]">
           {step === 0 && (
             <div className="space-y-4">
-              <div className="brand-display text-4xl mb-2 text-[#fff0b0]">Welcome to Cronosaurus! 👋</div>
-              <p className="text-[#dcca8a] leading-relaxed">
+              <div className="brand-display text-4xl mb-2 text-[#b0f0e8]">Welcome to Cronosaurus! 👋</div>
+              <p className="text-[#8adcca] leading-relaxed">
                 Let's get you set up in just a few steps. You'll configure your Azure AI Foundry
                 project, choose which models to use, and optionally connect your database and tools.
               </p>
               <div className="terminal-panel p-4">
                 <h3 className="terminal-label text-[#97ff8a] mb-2">prerequisites:</h3>
-                <ul className="text-sm text-[#b8ad78] space-y-1.5">
+                <ul className="text-sm text-[#78adb8] space-y-1.5">
                   <li className="flex items-start gap-2">
-                    <span className="mt-0.5 text-[#f2c230]">•</span>
-                    <span>An <strong className="text-[#f6efc9]">Azure AI Foundry project</strong> with at least one model deployed</span>
+                    <span className="mt-0.5 text-[#3dd8c5]">•</span>
+                    <span>An <strong className="text-[#c9f6ef]">Azure AI Foundry project</strong> with at least one model deployed</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="mt-0.5 text-[#f2c230]">•</span>
-                    <span>An <strong className="text-[#f6efc9]">Azure Cosmos DB</strong> account (for persistence)</span>
+                    <span className="mt-0.5 text-[#3dd8c5]">•</span>
+                    <span>An <strong className="text-[#c9f6ef]">Azure Cosmos DB</strong> account (for persistence)</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="mt-0.5 text-[#f2c230]">•</span>
-                    <span><strong className="text-[#f6efc9]">Azure CLI</strong> logged in (<code className="text-xs bg-[#16120c] border border-[#f2c230]/18 px-1.5 py-0.5">az login</code>)</span>
+                    <span className="mt-0.5 text-[#3dd8c5]">•</span>
+                    <span><strong className="text-[#c9f6ef]">Azure CLI</strong> logged in (<code className="text-xs bg-[#16120c] border border-[#3dd8c5]/18 px-1.5 py-0.5">az login</code>)</span>
                   </li>
                 </ul>
               </div>
-              <p className="text-sm text-[#786d48]">
+              <p className="text-sm text-[#486d78]">
                 You can always change these settings later from the Settings panel.
               </p>
             </div>
@@ -204,7 +204,7 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
 
           {step === 1 && (
             <div className="space-y-4">
-              <p className="text-[#b8ad78] text-sm">
+              <p className="text-[#78adb8] text-sm">
                 Enter your Azure AI Foundry project endpoint. You can find this in the Azure AI Foundry portal
                 under your project's overview page.
               </p>
@@ -215,7 +215,7 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                   value={projectEndpoint}
                   onChange={(e) => setProjectEndpoint(e.target.value)}
                   placeholder="https://<resource>.services.ai.azure.com/api/projects/<project>"
-                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-[#f2c230]"
+                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-[#3dd8c5]"
                 />
               </div>
               <div>
@@ -223,7 +223,7 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                 <select
                   value={modelDeployment}
                   onChange={(e) => setModelDeployment(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-[#f2c230]"
+                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-[#3dd8c5]"
                 >
                   {!selectedModels.includes(modelDeployment) && modelDeployment && (
                     <option value={modelDeployment}>{modelDeployment}</option>
@@ -235,13 +235,13 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                     <option value="">Select a model</option>
                   )}
                 </select>
-                <p className="text-xs text-[#786d48] mt-1">Must match a deployment name in your Foundry project</p>
+                <p className="text-xs text-[#486d78] mt-1">Must match a deployment name in your Foundry project</p>
               </div>
               {projectEndpoint && (
                 <button
                   onClick={handleTestFoundry}
                   disabled={foundryTest.status === "testing"}
-                  className="terminal-control flex items-center gap-2 px-4 py-2 text-sm text-[#dcca8a] transition-colors disabled:opacity-50 hover:bg-[#1b160f]"
+                  className="terminal-control flex items-center gap-2 px-4 py-2 text-sm text-[#8adcca] transition-colors disabled:opacity-50 hover:bg-[#0f161b]"
                 >
                   {foundryTest.status === "testing" ? (
                     <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
@@ -261,7 +261,7 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
 
           {step === 2 && (
             <div className="space-y-4">
-              <p className="text-[#b8ad78] text-sm">
+              <p className="text-[#78adb8] text-sm">
                 Select which models you want available in the model selector. These should match
                 deployments in your Azure AI Foundry project.
               </p>
@@ -271,7 +271,7 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                 <button
                   onClick={handleLoadDeployments}
                   disabled={deploymentsLoading || !projectEndpoint}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-amber-900/30 border border-amber-700 text-amber-300 hover:bg-amber-900/50 disabled:opacity-40 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-amber-900/30 border border-amber-700 text-teal-300 hover:bg-amber-900/50 disabled:opacity-40 transition-colors"
                 >
                   {deploymentsLoading ? <span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" /> : (
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
@@ -286,7 +286,7 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
 
               {/* Foundry deployments list */}
               {foundryDeployments.length > 0 && (
-                <div className="terminal-panel divide-y divide-[#f2c230]/10">
+                <div className="terminal-panel divide-y divide-[#3dd8c5]/10">
                   {foundryDeployments.map((d) => (
                     <div key={d.name} className="flex items-center gap-3 px-3 py-2">
                       <div className="flex-1 min-w-0">
@@ -297,8 +297,8 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                         onClick={() => { setModelDeployment(d.name); }}
                         className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
                           modelDeployment === d.name
-                            ? "bg-amber-500 border-amber-500 text-[#120f07]"
-                            : "border-gray-600 text-gray-400 hover:border-amber-500 hover:text-amber-300"
+                            ? "bg-amber-500 border-amber-500 text-[#071210]"
+                            : "border-gray-600 text-gray-400 hover:border-amber-500 hover:text-teal-300"
                         }`}
                       >
                         {modelDeployment === d.name ? "Default" : "Set as default"}
@@ -306,7 +306,7 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                       <button
                         onClick={() => toggleModel(d.name)}
                         className={`w-4 h-4 rounded border flex items-center justify-center text-xs flex-shrink-0 ${
-                          selectedModels.includes(d.name) ? "bg-amber-500 border-amber-500 text-[#120f07]" : "border-gray-600"
+                          selectedModels.includes(d.name) ? "bg-amber-500 border-amber-500 text-[#071210]" : "border-gray-600"
                         }`}
                       >
                         {selectedModels.includes(d.name) && "✓"}
@@ -324,12 +324,12 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                     onClick={() => toggleModel(model)}
                     className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm text-left transition-colors ${
                       selectedModels.includes(model)
-                        ? "bg-amber-900/30 border-amber-600 text-amber-200"
+                        ? "bg-amber-900/30 border-amber-600 text-teal-200"
                         : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600"
                     }`}
                   >
                     <div className={`w-4 h-4 rounded border flex items-center justify-center text-xs ${
-                      selectedModels.includes(model) ? "bg-amber-500 border-amber-500 text-[#120f07]" : "border-gray-600"
+                      selectedModels.includes(model) ? "bg-amber-500 border-amber-500 text-[#071210]" : "border-gray-600"
                     }`}>
                       {selectedModels.includes(model) && "✓"}
                     </div>
@@ -339,8 +339,8 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                         onClick={(e) => { e.stopPropagation(); setModelDeployment(model); }}
                         className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
                           modelDeployment === model
-                            ? "bg-amber-500 border-amber-500 text-[#120f07]"
-                            : "border-gray-600 text-gray-400 hover:border-amber-500 hover:text-amber-300"
+                            ? "bg-amber-500 border-amber-500 text-[#071210]"
+                            : "border-gray-600 text-gray-400 hover:border-amber-500 hover:text-teal-300"
                         }`}
                       >
                         {modelDeployment === model ? "Default" : "Set as default"}
@@ -350,15 +350,15 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                 ))}
               </div>
               <div className="terminal-panel p-3">
-                <p className="text-xs text-[#b8ad78]">
-                  <strong className="text-[#dcca8a]">Tip:</strong> You can also type custom model names directly.
+                <p className="text-xs text-[#78adb8]">
+                  <strong className="text-[#8adcca]">Tip:</strong> You can also type custom model names directly.
                   Add a custom deployment name:
                 </p>
                 <div className="flex gap-2 mt-2">
                   <input
                     type="text"
                     placeholder="custom-model-name"
-                    className="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-[#f2c230]"
+                    className="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-[#3dd8c5]"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         const val = (e.target as HTMLInputElement).value.trim();
@@ -377,7 +377,7 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
 
           {step === 3 && (
             <div className="space-y-4">
-              <p className="text-[#b8ad78] text-sm">
+              <p className="text-[#78adb8] text-sm">
                 Azure Cosmos DB is used to persist agents, conversations, and user settings.
                 Enter your account details below.
               </p>
@@ -388,7 +388,7 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                   value={cosmosUrl}
                   onChange={(e) => setCosmosUrl(e.target.value)}
                   placeholder="https://<account>.documents.azure.com:443/"
-                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-[#f2c230]"
+                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-[#3dd8c5]"
                 />
               </div>
               <div>
@@ -398,7 +398,7 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                   value={cosmosKey}
                   onChange={(e) => setCosmosKey(e.target.value)}
                   placeholder="Your primary or secondary key"
-                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-[#f2c230]"
+                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-[#3dd8c5]"
                 />
               </div>
               <div>
@@ -408,14 +408,14 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                   value={cosmosDb}
                   onChange={(e) => setCosmosDb(e.target.value)}
                   placeholder="cronosaurus"
-                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-[#f2c230]"
+                  className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-[#3dd8c5]"
                 />
               </div>
               {cosmosUrl && cosmosKey && (
                 <button
                   onClick={handleTestCosmos}
                   disabled={cosmosTest.status === "testing"}
-                  className="terminal-control flex items-center gap-2 px-4 py-2 text-sm text-[#dcca8a] transition-colors disabled:opacity-50 hover:bg-[#1b160f]"
+                  className="terminal-control flex items-center gap-2 px-4 py-2 text-sm text-[#8adcca] transition-colors disabled:opacity-50 hover:bg-[#0f161b]"
                 >
                   {cosmosTest.status === "testing" ? (
                     <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
@@ -435,7 +435,7 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
 
           {step === 4 && (
             <div className="space-y-4">
-              <p className="text-[#b8ad78] text-sm">
+              <p className="text-[#78adb8] text-sm">
                 Would you like to configure any of these optional tools? You can always set them up
                 later from the Settings panel.
               </p>
@@ -449,7 +449,7 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                   }`}
                 >
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg ${
-                    configureEmail ? "bg-amber-500 text-[#120f07]" : "bg-gray-700"
+                    configureEmail ? "bg-amber-500 text-[#071210]" : "bg-gray-700"
                   }`}>
                     ✉️
                   </div>
@@ -458,7 +458,7 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                     <div className="text-xs text-gray-400">Let agents send and read emails on your behalf</div>
                   </div>
                   <div className={`w-5 h-5 rounded border flex items-center justify-center text-xs ${
-                    configureEmail ? "bg-amber-500 border-amber-500 text-[#120f07]" : "border-gray-600"
+                    configureEmail ? "bg-amber-500 border-amber-500 text-[#071210]" : "border-gray-600"
                   }`}>
                     {configureEmail && "✓"}
                   </div>
@@ -473,7 +473,7 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                   }`}
                 >
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg ${
-                    configureCosmos ? "bg-amber-500 text-[#120f07]" : "bg-gray-700"
+                    configureCosmos ? "bg-amber-500 text-[#071210]" : "bg-gray-700"
                   }`}>
                     🗄️
                   </div>
@@ -482,13 +482,13 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                     <div className="text-xs text-gray-400">Persist agents, conversations, and user settings across sessions</div>
                   </div>
                   <div className={`w-5 h-5 rounded border flex items-center justify-center text-xs ${
-                    configureCosmos ? "bg-amber-500 border-amber-500 text-[#120f07]" : "border-gray-600"
+                    configureCosmos ? "bg-amber-500 border-amber-500 text-[#071210]" : "border-gray-600"
                   }`}>
                     {configureCosmos && "✓"}
                   </div>
                 </button>
               </div>
-              <p className="text-xs text-[#786d48]">
+              <p className="text-xs text-[#486d78]">
                 These preferences are saved so you can return to set them up from the management panel.
               </p>
             </div>
@@ -496,31 +496,31 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
 
           {step === 5 && (
             <div className="space-y-4">
-              <div className="text-4xl mb-2 text-[#fff0b0]">You're all set! 🚀</div>
-              <p className="text-[#dcca8a] leading-relaxed">
+              <div className="text-4xl mb-2 text-[#b0f0e8]">You're all set! 🚀</div>
+              <p className="text-[#8adcca] leading-relaxed">
                 Your Cronosaurus instance is configured and ready to go.
                 Here's a summary of your setup:
               </p>
-              <div className="terminal-panel divide-y divide-[#f2c230]/10">
+              <div className="terminal-panel divide-y divide-[#3dd8c5]/10">
                 <div className="flex justify-between px-4 py-2.5">
-                  <span className="text-sm text-[#b8ad78]">AI Foundry</span>
-                  <span className="text-sm text-[#f6efc9] truncate ml-4 max-w-[300px]">{projectEndpoint || "Not set"}</span>
+                  <span className="text-sm text-[#78adb8]">AI Foundry</span>
+                  <span className="text-sm text-[#c9f6ef] truncate ml-4 max-w-[300px]">{projectEndpoint || "Not set"}</span>
                 </div>
                 <div className="flex justify-between px-4 py-2.5">
-                  <span className="text-sm text-[#b8ad78]">Default Model</span>
-                  <span className="text-sm text-[#f6efc9]">{modelDeployment}</span>
+                  <span className="text-sm text-[#78adb8]">Default Model</span>
+                  <span className="text-sm text-[#c9f6ef]">{modelDeployment}</span>
                 </div>
                 <div className="flex justify-between px-4 py-2.5">
-                  <span className="text-sm text-[#b8ad78]">Models</span>
-                  <span className="text-sm text-[#f6efc9]">{selectedModels.length} selected</span>
+                  <span className="text-sm text-[#78adb8]">Models</span>
+                  <span className="text-sm text-[#c9f6ef]">{selectedModels.length} selected</span>
                 </div>
                 <div className="flex justify-between px-4 py-2.5">
-                  <span className="text-sm text-[#b8ad78]">Cosmos DB</span>
-                  <span className="text-sm text-[#f6efc9]">{cosmosUrl ? "Configured" : "Not configured"}</span>
+                  <span className="text-sm text-[#78adb8]">Cosmos DB</span>
+                  <span className="text-sm text-[#c9f6ef]">{cosmosUrl ? "Configured" : "Not configured"}</span>
                 </div>
                 <div className="flex justify-between px-4 py-2.5">
-                  <span className="text-sm text-[#b8ad78]">Email</span>
-                  <span className="text-sm text-[#f6efc9]">{configureEmail ? "Will configure" : "Skipped"}</span>
+                  <span className="text-sm text-[#78adb8]">Email</span>
+                  <span className="text-sm text-[#c9f6ef]">{configureEmail ? "Will configure" : "Skipped"}</span>
                 </div>
               </div>
               {error && (
@@ -533,11 +533,11 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
         </div>
 
         {/* Footer navigation */}
-        <div className="px-6 py-4 border-t border-[#f2c230]/10 flex justify-between">
+        <div className="px-6 py-4 border-t border-[#3dd8c5]/10 flex justify-between">
           <button
             onClick={() => setStep((s) => Math.max(0, s - 1))}
             disabled={step === 0}
-            className="terminal-control px-4 py-2 text-sm text-[#b8ad78] hover:text-[#fff0b0] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="terminal-control px-4 py-2 text-sm text-[#78adb8] hover:text-[#b0f0e8] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             back
           </button>
@@ -556,7 +556,7 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
                 disabled={saving}
                 className="brand-button-primary rounded-lg px-6 py-2 text-sm font-semibold disabled:opacity-50 transition-all flex items-center gap-2"
               >
-                {saving && <span className="w-4 h-4 border-2 border-[#120f07] border-t-transparent rounded-full animate-spin" />}
+                {saving && <span className="w-4 h-4 border-2 border-[#071210] border-t-transparent rounded-full animate-spin" />}
                 Get Started
               </button>
             )}

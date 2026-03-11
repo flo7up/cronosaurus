@@ -11,10 +11,22 @@ import { fetchToolCatalog, updateToolLibrary, batchUpdateToolLibrary } from "../
 import { updateAgentTrigger, testAgentTrigger } from "../api/agent";
 import { fetchSettings, updateSettings, testFoundryConnection, testCosmosConnection, fetchDeployments, fetchProviderModels } from "../api/settings";
 import type { FoundryDeployment } from "../api/settings";
+import type { NotificationChannel, DistributionGroup } from "../api/notification";
+import {
+  fetchNotificationChannels,
+  addNotificationChannel,
+  updateNotificationChannel,
+  deleteNotificationChannel,
+  testNotificationChannel,
+  fetchDistributionGroups,
+  addDistributionGroup,
+  updateDistributionGroup,
+  deleteDistributionGroup,
+} from "../api/notification";
 
 // ── Types ──────────────────────────────────────────────────
 
-type Tab = "tools" | "triggers" | "email" | "mcp" | "settings";
+type Tab = "tools" | "triggers" | "email" | "mcp" | "notifications" | "appearance" | "settings";
 
 interface ManagementPanelProps {
   defaultTab?: Tab;
@@ -80,6 +92,8 @@ const TABS: { id: Tab; label: string; description: string }[] = [
   { id: "triggers", label: "Triggers", description: "Agent automations" },
   { id: "email", label: "Email", description: "Account settings" },
   { id: "mcp", label: "MCP Servers", description: "External tool servers" },
+  { id: "notifications", label: "Notifications", description: "Channels & groups" },
+  { id: "appearance", label: "Appearance", description: "Theme & display" },
   { id: "settings", label: "Settings", description: "Foundry & models" },
 ];
 
@@ -144,9 +158,9 @@ export default function ManagementPanel({
       <div className="app-modal w-full max-w-5xl h-[85vh] flex flex-col rounded-2xl overflow-hidden">
         <div className="terminal-titlebar px-6">cronosaurus :: control panel</div>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#f2c230]/10">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#3dd8c5]/10">
           <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-teal-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -155,11 +169,11 @@ export default function ManagementPanel({
               />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            <h2 className="text-lg font-semibold text-[#fff0b0] uppercase tracking-[0.12em]">Settings</h2>
+            <h2 className="text-lg font-semibold text-[#b0f0e8] uppercase tracking-[0.12em]">Settings</h2>
           </div>
           <button
             onClick={onClose}
-            className="terminal-control p-1.5 text-[#b8ad78] hover:text-[#fff0b0] transition-colors"
+            className="terminal-control p-1.5 text-[#78adb8] hover:text-[#b0f0e8] transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -170,7 +184,7 @@ export default function ManagementPanel({
         {/* Body */}
         <div className="flex flex-1 overflow-hidden">
           {/* Tab sidebar */}
-          <nav className="w-52 border-r border-[#f2c230]/10 p-3 space-y-1 shrink-0">
+          <nav className="w-52 border-r border-[#3dd8c5]/10 p-3 space-y-1 shrink-0">
             {TABS.map((tab) => {
               const badge =
                 tab.id === "triggers" && activeTriggers > 0 ? activeTriggers
@@ -183,21 +197,21 @@ export default function ManagementPanel({
                   onClick={() => setActiveTab(tab.id)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm transition-colors ${
                     activeTab === tab.id
-                      ? "bg-[#241b10] text-[#fff0b0] ring-1 ring-amber-200/10"
-                      : "text-[#b8ad78] hover:bg-[#1b160f]/75 hover:text-[#f6efc9]"
+                      ? "bg-[#241b10] text-[#b0f0e8] ring-1 ring-teal-200/10"
+                      : "text-[#78adb8] hover:bg-[#0f161b]/75 hover:text-[#c9f6ef]"
                   }`}
                 >
                   <TabIcon tab={tab.id} active={activeTab === tab.id} />
                   <div className="flex-1 min-w-0">
                     <div className="font-medium">{tab.label}</div>
-                    <div className="text-[11px] text-[#6d6242] truncate">{tab.description}</div>
+                    <div className="text-[11px] text-[#426d6d] truncate">{tab.description}</div>
                   </div>
                   {badge > 0 && (
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${
                       tab.id === "triggers"
                         ? "bg-amber-900/40 text-amber-400"
                         : tab.id === "email"
-                          ? "bg-[#12180f] text-[#97ff8a]"
+                          ? "bg-[#0f1812] text-[#97ff8a]"
                           : "bg-[#25150b] text-[#ffcf67]"
                     }`}>
                       {badge}
@@ -248,6 +262,8 @@ export default function ManagementPanel({
               />
             )}
             {activeTab === "settings" && <SettingsTab />}
+            {activeTab === "notifications" && <NotificationsTab />}
+            {activeTab === "appearance" && <AppearanceTab />}
           </div>
         </div>
       </div>
@@ -258,7 +274,7 @@ export default function ManagementPanel({
 // ── Tab icon ───────────────────────────────────────────────
 
 function TabIcon({ tab, active }: { tab: Tab; active: boolean }) {
-  const cls = `w-5 h-5 ${active ? "text-amber-300" : ""}`;
+  const cls = `w-5 h-5 ${active ? "text-teal-300" : ""}`;
   switch (tab) {
     case "tools":
       return (
@@ -294,6 +310,20 @@ function TabIcon({ tab, active }: { tab: Tab; active: boolean }) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
             d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.204-.107-.397.165-.71.505-.78.929l-.15.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.506-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" />
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      );
+    case "notifications":
+      return (
+        <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+            d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+        </svg>
+      );
+    case "appearance":
+      return (
+        <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+            d="M4.098 19.902a3.75 3.75 0 005.304 0l6.401-6.402M6.75 21A3.75 3.75 0 013 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 003.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008z" />
         </svg>
       );
   }
@@ -342,9 +372,9 @@ function ToolRow({ tool, onToggle }: { tool: ToolCatalogEntry; onToggle: () => v
   return (
     <button
       onClick={onToggle}
-      className="w-full flex items-center gap-3 px-3 py-3 hover:bg-[#1b160f] transition-colors"
+      className="w-full flex items-center gap-3 px-3 py-3 hover:bg-[#0f161b] transition-colors"
     >
-      <span className={tool.in_library ? "text-[#97ff8a]" : "text-[#786d48]"}>
+      <span className={tool.in_library ? "text-[#97ff8a]" : "text-[#486d78]"}>
         {icon || (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
@@ -354,7 +384,7 @@ function ToolRow({ tool, onToggle }: { tool: ToolCatalogEntry; onToggle: () => v
       </span>
       <div className="flex-1 text-left">
         <div className="flex items-center gap-2">
-          <span className={`text-sm font-medium ${tool.in_library ? "text-[#f6efc9]" : "text-[#9b8f64]"}`}>
+          <span className={`text-sm font-medium ${tool.in_library ? "text-[#c9f6ef]" : "text-[#649b8f]"}`}>
             {tool.label}
           </span>
           {needsConfig && (
@@ -363,15 +393,15 @@ function ToolRow({ tool, onToggle }: { tool: ToolCatalogEntry; onToggle: () => v
             </span>
           )}
         </div>
-        <div className="text-xs text-[#786d48] mt-0.5">{tool.description}</div>
+        <div className="text-xs text-[#486d78] mt-0.5">{tool.description}</div>
       </div>
       <div
         className={`w-9 h-5 transition-colors relative flex-shrink-0 border ${
-          tool.in_library ? "bg-[#152212] border-[#97ff8a]/40" : "bg-[#16120c] border-[#5f4c1d]"
+          tool.in_library ? "bg-[#122215] border-[#97ff8a]/40" : "bg-[#16120c] border-[#1d4c5f]"
         }`}
       >
         <span
-          className={`absolute top-0.5 w-4 h-4 bg-[#f6efc9] shadow transition-transform ${
+          className={`absolute top-0.5 w-4 h-4 bg-[#c9f6ef] shadow transition-transform ${
             tool.in_library ? "left-[18px]" : "left-0.5"
           }`}
         />
@@ -471,7 +501,7 @@ function ToolsTab({
 
       {/* Search bar */}
       <div className="relative">
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#786d48]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#486d78]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
         </svg>
         <input
@@ -482,14 +512,14 @@ function ToolsTab({
           className="terminal-control w-full pl-9 pr-3 py-2 text-sm"
         />
         {toolSearch && (
-          <button onClick={() => setToolSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#786d48] hover:text-[#dcca8a]">
+          <button onClick={() => setToolSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#486d78] hover:text-[#8adcca]">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         )}
       </div>
 
       {toolSearch && filteredCatalog.length === 0 && (
-        <p className="text-sm text-[#786d48] text-center py-8">No tools matching "{toolSearch}"</p>
+        <p className="text-sm text-[#486d78] text-center py-8">No tools matching "{toolSearch}"</p>
       )}
 
       {/* Built-in tools */}
@@ -1137,13 +1167,13 @@ function TriggersTab({
                     <div className="terminal-label text-[#97ff8a] mb-1">
                       {testResult.total_matches ?? 0} matching email(s) found
                     </div>
-                    <div className="text-xs text-[#8b7f59]">{testResult.explanation || ""}</div>
+                    <div className="text-xs text-[#597f8b]">{testResult.explanation || ""}</div>
                     {(testResult.matching_emails || []).map((em, i) => (
                       <details key={i} className="group">
                         <summary className="terminal-control flex items-center gap-2 px-2.5 py-2 text-xs cursor-pointer select-none">
                           <svg className="w-3 h-3 transition-transform group-open:rotate-90 text-[#97ff8a]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                          <span className="text-[#dcca8a] truncate flex-1">{em.subject}</span>
-                          <span className="text-[#786d48] shrink-0">{em.from}</span>
+                          <span className="text-[#8adcca] truncate flex-1">{em.subject}</span>
+                          <span className="text-[#486d78] shrink-0">{em.from}</span>
                         </summary>
                         <div className="terminal-bubble mt-1 px-3 py-2 text-[10px] text-[#e0f5d0] whitespace-pre-wrap font-mono max-h-48 overflow-auto">
                           {em.agent_input_preview}
@@ -1152,7 +1182,7 @@ function TriggersTab({
                     ))}
                   </div>
                 )}
-                <button onClick={() => setTestResult(null)} className="terminal-control px-3 py-1 text-xs text-[#b8ad78] hover:text-[#fff0b0]">
+                <button onClick={() => setTestResult(null)} className="terminal-control px-3 py-1 text-xs text-[#78adb8] hover:text-[#b0f0e8]">
                   Dismiss
                 </button>
               </div>
@@ -1173,7 +1203,7 @@ function TriggersTab({
                   onClick={() => setTriggerType("regular")}
                   className={`flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm transition-colors ${
                     triggerType === "regular"
-                      ? "border-amber-500 bg-amber-900/30 text-amber-300"
+                      ? "border-amber-500 bg-amber-900/30 text-teal-300"
                       : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600"
                   }`}
                 >
@@ -1224,7 +1254,7 @@ function TriggersTab({
                     onClick={() => { setIntervalVal(p.value); setCustomInterval(""); }}
                     className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
                       interval === p.value && !customInterval
-                        ? "border-amber-500 bg-amber-900/30 text-amber-300"
+                        ? "border-amber-500 bg-amber-900/30 text-teal-300"
                         : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600"
                     }`}
                   >
@@ -1546,7 +1576,7 @@ function EmailTab({
                   </span>
                 )}
                 {!acct.has_password && (
-                  <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-amber-600/30 text-amber-300 border border-amber-700">
+                  <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-amber-600/30 text-teal-300 border border-amber-700">
                     No Password
                   </span>
                 )}
@@ -1646,7 +1676,7 @@ function EmailTab({
 
       {/* Password warning */}
       {editingAccount && !editingAccount.has_password && (
-        <div className="p-3 rounded-lg bg-amber-900/30 border border-amber-700 text-amber-300 text-sm flex items-start gap-2">
+        <div className="p-3 rounded-lg bg-amber-900/30 border border-amber-700 text-teal-300 text-sm flex items-start gap-2">
           <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
@@ -2240,14 +2270,14 @@ function SettingsTab() {
   return (
     <div className="space-y-8 max-w-2xl">
       <div>
-        <h3 className="text-[#f6efc9] font-semibold mb-1 uppercase tracking-[0.08em]">Settings</h3>
-        <p className="text-xs text-[#8b7f59]">Configure your model provider, API keys, and database connection.</p>
+        <h3 className="text-[#c9f6ef] font-semibold mb-1 uppercase tracking-[0.08em]">Settings</h3>
+        <p className="text-xs text-[#597f8b]">Configure your model provider, API keys, and database connection.</p>
       </div>
 
       {/* Provider selection */}
       <section className="space-y-3">
         <h4 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-          <span className="w-2 h-2 bg-[#f2c230]" />
+          <span className="w-2 h-2 bg-[#3dd8c5]" />
           Model Provider
         </h4>
         <div className="grid grid-cols-3 gap-2">
@@ -2261,8 +2291,8 @@ function SettingsTab() {
               onClick={() => setProvider(p.id)}
               className={`terminal-control flex flex-col items-start gap-1 px-3 py-2.5 text-left transition-colors ${
                 provider === p.id
-                  ? "bg-[#22190e] border-[#f2c230]/30 text-[#fff0b0]"
-                  : "text-[#b8ad78] hover:bg-[#1b160f]"
+                  ? "bg-[#0e1922] border-[#3dd8c5]/30 text-[#b0f0e8]"
+                  : "text-[#78adb8] hover:bg-[#0f161b]"
               }`}
             >
               <span className="text-xs font-medium">{p.label}</span>
@@ -2309,7 +2339,7 @@ function SettingsTab() {
       {provider === "anthropic" && (
         <section className="space-y-3">
           <h4 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-            <span className="w-2 h-2 bg-[#f2c230]" />
+            <span className="w-2 h-2 bg-[#3dd8c5]" />
             Anthropic Configuration
           </h4>
           <div>
@@ -2342,7 +2372,7 @@ function SettingsTab() {
       {provider === "azure_foundry" && (
       <section className="space-y-3">
         <h4 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-          <span className="w-2 h-2 bg-[#f2c230]" />
+          <span className="w-2 h-2 bg-[#3dd8c5]" />
           Azure AI Foundry
         </h4>
         <div>
@@ -2412,7 +2442,7 @@ function SettingsTab() {
           <span className="w-2 h-2 bg-[#97ff8a]" />
           Available Models
         </h4>
-        <p className="text-xs text-[#8b7f59]">Select which models appear in the model selector dropdown.</p>
+        <p className="text-xs text-[#597f8b]">Select which models appear in the model selector dropdown.</p>
 
         {/* Load models — provider-aware */}
         <div className="flex items-center gap-2">
@@ -2626,10 +2656,387 @@ function SettingsTab() {
           disabled={saving}
           className="brand-button-primary px-5 py-2 text-sm font-semibold disabled:opacity-50 transition-all flex items-center gap-2"
         >
-          {saving && <span className="w-3.5 h-3.5 border-2 border-[#120f07] border-t-transparent rounded-full animate-spin" />}
+          {saving && <span className="w-3.5 h-3.5 border-2 border-[#071210] border-t-transparent rounded-full animate-spin" />}
           save settings
         </button>
         {saved && <span className="text-sm text-[#97ff8a]">Settings saved!</span>}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+//  APPEARANCE TAB
+// ══════════════════════════════════════════════════════════
+
+function AppearanceTab() {
+  const [lightMode, setLightMode] = useState(() => document.documentElement.classList.contains("light"));
+
+  const toggleTheme = () => {
+    const next = !lightMode;
+    setLightMode(next);
+    if (next) {
+      document.documentElement.classList.add("light");
+    } else {
+      document.documentElement.classList.remove("light");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <section>
+        <h3 className="text-sm font-semibold text-gray-200 mb-1">Theme</h3>
+        <p className="text-xs text-gray-500 mb-3">Choose how Cronosaurus looks.</p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => { if (lightMode) toggleTheme(); }}
+            className={`flex-1 flex flex-col items-center gap-2 px-4 py-4 rounded-lg border transition-colors ${
+              !lightMode
+                ? "bg-gray-800 border-green-600 text-gray-200"
+                : "bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-600"
+            }`}
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+            </svg>
+            <span className="text-xs font-medium">Dark</span>
+          </button>
+          <button
+            onClick={() => { if (!lightMode) toggleTheme(); }}
+            className={`flex-1 flex flex-col items-center gap-2 px-4 py-4 rounded-lg border transition-colors ${
+              lightMode
+                ? "bg-gray-800 border-green-600 text-gray-200"
+                : "bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-600"
+            }`}
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+            </svg>
+            <span className="text-xs font-medium">Light</span>
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+//  NOTIFICATIONS TAB
+// ══════════════════════════════════════════════════════════
+
+function NotificationsTab() {
+  const [channels, setChannels] = useState<NotificationChannel[]>([]);
+  const [newEmail, setNewEmail] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+  const [addingChannel, setAddingChannel] = useState(false);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ id: string; ok: boolean; msg: string } | null>(null);
+  const [groups, setGroups] = useState<DistributionGroup[]>([]);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [addingGroup, setAddingGroup] = useState(false);
+
+  useEffect(() => {
+    fetchNotificationChannels().then(setChannels).catch(() => {});
+    fetchDistributionGroups().then(setGroups).catch(() => {});
+  }, []);
+
+  async function handleAddChannel() {
+    if (!newEmail.trim()) return;
+    setAddingChannel(true);
+    try {
+      const ch = await addNotificationChannel({
+        type: "email",
+        address: newEmail.trim(),
+        label: newLabel.trim() || undefined,
+      });
+      setChannels((prev) => [...prev, ch]);
+      setNewEmail("");
+      setNewLabel("");
+    } catch { /* silent */ }
+    setAddingChannel(false);
+  }
+
+  async function handleToggleChannel(id: string, enabled: boolean) {
+    try {
+      const updated = await updateNotificationChannel(id, { enabled });
+      setChannels((prev) => prev.map((c) => (c.id === id ? updated : c)));
+    } catch { /* silent */ }
+  }
+
+  async function handleDeleteChannel(id: string) {
+    await deleteNotificationChannel(id);
+    setChannels((prev) => prev.filter((c) => c.id !== id));
+  }
+
+  async function handleTestChannel(id: string) {
+    setTestingId(id);
+    setTestResult(null);
+    try {
+      const result = await testNotificationChannel(id);
+      setTestResult({ id, ok: result.success, msg: result.message });
+    } catch {
+      setTestResult({ id, ok: false, msg: "Failed to test" });
+    }
+    setTestingId(null);
+  }
+
+  async function handleAddGroup() {
+    setAddingGroup(true);
+    try {
+      const nextNum = groups.length + 1;
+      const name = `Group ${nextNum}`;
+      const g = await addDistributionGroup({ name, description: "", emails: [] });
+      setGroups((prev) => [...prev, g]);
+      setEditingGroupId(g.id);
+    } catch { /* silent */ }
+    setAddingGroup(false);
+  }
+
+  async function handleUpdateGroup(id: string, updates: { name?: string; description?: string; emails?: string[] }) {
+    try {
+      const updated = await updateDistributionGroup(id, updates);
+      setGroups((prev) => prev.map((g) => (g.id === id ? updated : g)));
+    } catch { /* silent */ }
+    setEditingGroupId(null);
+  }
+
+  async function handleDeleteGroup(id: string) {
+    await deleteDistributionGroup(id);
+    setGroups((prev) => prev.filter((g) => g.id !== id));
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Notification channels */}
+      <section>
+        <h3 className="text-sm font-semibold text-gray-200 mb-1">Notification Channels</h3>
+        <p className="text-xs text-gray-500 mb-3">
+          Email addresses that receive notifications from your agents.
+        </p>
+
+        {channels.length > 0 && (
+          <div className="space-y-2 mb-3">
+            {channels.map((ch) => (
+              <div
+                key={ch.id}
+                className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg"
+              >
+                <svg className="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-gray-200 truncate">{ch.address}</div>
+                  {ch.label && ch.label !== ch.address && (
+                    <div className="text-[10px] text-gray-500">{ch.label}</div>
+                  )}
+                </div>
+                {testResult?.id === ch.id && (
+                  <span className={`text-[10px] ${testResult.ok ? "text-green-400" : "text-red-400"}`}>
+                    {testResult.ok ? "Sent!" : testResult.msg}
+                  </span>
+                )}
+                <button
+                  onClick={() => handleTestChannel(ch.id)}
+                  disabled={testingId === ch.id}
+                  className="text-[10px] text-gray-400 hover:text-white transition-colors px-1"
+                  title="Send test notification"
+                >
+                  {testingId === ch.id ? (
+                    <div className="w-3 h-3 border border-gray-500 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    "Test"
+                  )}
+                </button>
+                <button
+                  onClick={() => handleToggleChannel(ch.id, !ch.enabled)}
+                  className={`w-8 h-4 rounded-full transition-colors relative ${
+                    ch.enabled ? "bg-green-600/40" : "bg-gray-700"
+                  }`}
+                  title={ch.enabled ? "Disable" : "Enable"}
+                >
+                  <div
+                    className={`absolute top-0.5 w-3 h-3 rounded-full transition-all ${
+                      ch.enabled ? "right-0.5 bg-green-400" : "left-0.5 bg-gray-500"
+                    }`}
+                  />
+                </button>
+                <button
+                  onClick={() => handleDeleteChannel(ch.id)}
+                  className="p-0.5 text-gray-500 hover:text-red-400 transition-colors"
+                  title="Remove channel"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <input
+              type="email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              placeholder="email@example.com"
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+              onKeyDown={(e) => e.key === "Enter" && handleAddChannel()}
+            />
+            <input
+              type="text"
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              placeholder="Label (optional)"
+              className="w-32 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+              onKeyDown={(e) => e.key === "Enter" && handleAddChannel()}
+            />
+          </div>
+          <button
+            onClick={handleAddChannel}
+            disabled={!newEmail.trim() || addingChannel}
+            className="w-full py-1.5 text-xs rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:border-gray-600 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {addingChannel ? "Adding..." : "+ Add email channel"}
+          </button>
+        </div>
+
+        {channels.length === 0 && (
+          <p className="text-xs text-gray-600 text-center py-2 mt-2">
+            No channels configured. Add an email to receive notification reports.
+          </p>
+        )}
+      </section>
+
+      {/* Distribution groups */}
+      <section>
+        <h3 className="text-sm font-semibold text-gray-200 mb-1">Distribution Groups</h3>
+        <p className="text-xs text-gray-500 mb-3">
+          Group email addresses together. Assign a group to an agent so notifications go to the right people. Max 10 groups.
+        </p>
+
+        {groups.length > 0 && (
+          <div className="space-y-2 mb-3">
+            {groups.map((g) => {
+              const isEditing = editingGroupId === g.id;
+              return (
+                <div key={g.id} className="px-3 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg">
+                  {isEditing ? (
+                    <NotifGroupEditForm
+                      group={g}
+                      onSave={(updates) => handleUpdateGroup(g.id, updates)}
+                      onCancel={() => setEditingGroupId(null)}
+                    />
+                  ) : (
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-gray-200 font-medium">{g.name}</div>
+                        {g.description && (
+                          <div className="text-[10px] text-gray-500 mt-0.5">{g.description}</div>
+                        )}
+                        <div className="text-[10px] text-gray-600 mt-0.5 truncate">
+                          {g.emails.length > 0 ? g.emails.join(", ") : "No emails"}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setEditingGroupId(g.id)}
+                        className="p-0.5 text-gray-500 hover:text-gray-200 transition-colors shrink-0"
+                        title="Edit group"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteGroup(g.id)}
+                        className="p-0.5 text-gray-500 hover:text-red-400 transition-colors shrink-0"
+                        title="Delete group"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {groups.length < 10 && (
+          <button
+            onClick={handleAddGroup}
+            disabled={addingGroup}
+            className="w-full py-1.5 text-xs rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:border-gray-600 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {addingGroup ? "Adding..." : "+ Add distribution group"}
+          </button>
+        )}
+
+        {groups.length === 0 && (
+          <p className="text-xs text-gray-600 text-center py-2">
+            No distribution groups yet. Create one to target specific recipients.
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function NotifGroupEditForm({
+  group,
+  onSave,
+  onCancel,
+}: {
+  group: DistributionGroup;
+  onSave: (updates: { name?: string; description?: string; emails?: string[] }) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(group.name);
+  const [desc, setDesc] = useState(group.description);
+  const [emails, setEmails] = useState(group.emails.join(", "));
+
+  return (
+    <div className="space-y-2">
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Group name"
+        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+        maxLength={100}
+      />
+      <input
+        type="text"
+        value={desc}
+        onChange={(e) => setDesc(e.target.value)}
+        placeholder="Description"
+        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+        maxLength={300}
+      />
+      <textarea
+        value={emails}
+        onChange={(e) => setEmails(e.target.value)}
+        placeholder="Emails (comma or newline separated)"
+        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 min-h-[40px] resize-y"
+        rows={2}
+      />
+      <div className="flex gap-2 justify-end">
+        <button onClick={onCancel} className="text-[10px] text-gray-500 hover:text-gray-200 transition-colors px-2 py-1">
+          Cancel
+        </button>
+        <button
+          onClick={() => {
+            const parsed = emails.split(/[,;\n]/).map((e) => e.trim()).filter(Boolean);
+            onSave({ name: name.trim() || undefined, description: desc.trim(), emails: parsed });
+          }}
+          disabled={!name.trim()}
+          className="text-[10px] text-green-400 hover:text-green-300 transition-colors px-2 py-1 disabled:opacity-40"
+        >
+          Save
+        </button>
       </div>
     </div>
   );

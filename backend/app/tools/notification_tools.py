@@ -78,6 +78,15 @@ NOTIFICATION_TOOL_DEFINITIONS = [
                         "Defaults to 'image/jpeg'."
                     ),
                 },
+                "distribution_group_id": {
+                    "type": "string",
+                    "description": (
+                        "ID of the distribution group to send this notification to. "
+                        "If omitted, the notification is sent to all enabled channels. "
+                        "Use this when a specific distribution group is more appropriate "
+                        "for the notification content."
+                    ),
+                },
             },
             "required": ["title", "body"],
         },
@@ -94,8 +103,14 @@ def execute_notification_tool(
     agent_name: str | None = None,
     user_id: str = "1",
     thread_id: str | None = None,
+    notification_group_id: str | None = None,
 ) -> dict[str, Any]:
-    """Execute a notification tool call."""
+    """Execute a notification tool call.
+
+    notification_group_id: if set to a specific group ID (from agent config),
+    that group's emails are used instead of channels. If "auto" or None,
+    the agent can specify distribution_group_id in its arguments.
+    """
     if isinstance(arguments, str):
         try:
             arguments = json.loads(arguments)
@@ -111,6 +126,7 @@ def execute_notification_tool(
     level = arguments.get("level", "info")
     image_base64 = arguments.get("image_base64", "")
     image_media_type = arguments.get("image_media_type", "image/jpeg")
+    agent_chosen_group_id = arguments.get("distribution_group_id", "")
 
     # If no explicit image param, try the thread image cache
     if not image_base64 and thread_id:
@@ -145,22 +161,52 @@ def execute_notification_tool(
             images=images,
         )
 
-        # Deliver to all enabled channels
-        channels = user_service.get_enabled_notification_channels(user_id)
+        # Determine email recipients:
+        # 1. If agent has a fixed group (not "auto"), use that group's emails
+        # 2. If agent is "auto" and the agent chose a group, use that group
+        # 3. Otherwise, fall back to all enabled channels
+        resolved_group_id = None
+        if notification_group_id and notification_group_id != "auto":
+            resolved_group_id = notification_group_id
+        elif agent_chosen_group_id:
+            resolved_group_id = agent_chosen_group_id
+
         channels_sent = 0
-        for ch in channels:
-            if ch["type"] == "email":
-                ok = _send_to_email_channel(
-                    to_email=ch["address"],
-                    title=title,
-                    body=body,
-                    content=content,
-                    level=level,
-                    agent_name=agent_name,
-                    images=images,
-                )
-                if ok:
-                    channels_sent += 1
+        if resolved_group_id:
+            group = user_service.get_distribution_group(resolved_group_id, user_id)
+            if group:
+                for email_addr in group.get("emails", []):
+                    ok = _send_to_email_channel(
+                        to_email=email_addr,
+                        title=title,
+                        body=body,
+                        content=content,
+                        level=level,
+                        agent_name=agent_name,
+                        images=images,
+                    )
+                    if ok:
+                        channels_sent += 1
+            else:
+                logger.warning("Distribution group %s not found, falling back to channels", resolved_group_id)
+                resolved_group_id = None
+
+        if not resolved_group_id:
+            # Fall back to all enabled channels
+            channels = user_service.get_enabled_notification_channels(user_id)
+            for ch in channels:
+                if ch["type"] == "email":
+                    ok = _send_to_email_channel(
+                        to_email=ch["address"],
+                        title=title,
+                        body=body,
+                        content=content,
+                        level=level,
+                        agent_name=agent_name,
+                        images=images,
+                    )
+                    if ok:
+                        channels_sent += 1
 
         return {
             "success": True,

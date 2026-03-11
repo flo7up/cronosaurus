@@ -28,6 +28,7 @@ export interface Agent {
   tools: string[];
   email_account_id: string | null;
   custom_instructions: string;
+  notification_group_id: string | null;
   thread_id: string;
   foundry_agent_id: string;
   trigger: AgentTrigger | null;
@@ -96,6 +97,19 @@ export interface ToolPreference {
   enabled: boolean;
 }
 
+export interface ToolFunctionParam {
+  name: string;
+  type: string;
+  description: string;
+  required: boolean;
+}
+
+export interface ToolFunctionInfo {
+  name: string;
+  description: string;
+  parameters: ToolFunctionParam[];
+}
+
 export interface ToolCatalogEntry {
   id: string;
   label: string;
@@ -105,6 +119,7 @@ export interface ToolCatalogEntry {
   available: boolean;
   requires_config: boolean;
   provider_only: string;  // "" = all providers, or "azure_foundry" etc.
+  tools: ToolFunctionInfo[];
 }
 
 export interface EmailAccount {
@@ -135,6 +150,15 @@ export interface EmailAccountCreate {
   imap_host: string;
   imap_port: number;
   is_default: boolean;
+}
+
+// ── Distribution Groups ─────────────────────────────────────
+
+export interface DistributionGroup {
+  id: string;
+  name: string;
+  description: string;
+  emails: string[];
 }
 
 // ── App Settings / Onboarding ────────────────────────────────

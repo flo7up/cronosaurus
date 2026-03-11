@@ -50,6 +50,7 @@ def _agent_to_response(doc: dict) -> AgentResponse:
         tools=doc.get("tools", []),
         email_account_id=doc.get("email_account_id"),
         custom_instructions=doc.get("custom_instructions", ""),
+        notification_group_id=doc.get("notification_group_id"),
         thread_id=doc.get("thread_id", ""),
         foundry_agent_id=doc.get("foundry_agent_id", ""),
         trigger=trigger_resp,

@@ -180,7 +180,7 @@ export default function EmailAccountPanel({
                       </span>
                     )}
                     {!acct.has_password && (
-                      <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-amber-600/30 text-amber-300 border border-amber-700">
+                      <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-amber-600/30 text-teal-300 border border-amber-700">
                         No Password
                       </span>
                     )}
@@ -312,7 +312,7 @@ export default function EmailAccountPanel({
         <div className="flex-1 overflow-y-auto p-6">
           {/* Warning if password is missing */}
           {editingAccount && !editingAccount.has_password && (
-            <div className="mb-4 p-3 rounded-lg bg-amber-900/30 border border-amber-700 text-amber-300 text-sm flex items-start gap-2">
+            <div className="mb-4 p-3 rounded-lg bg-amber-900/30 border border-amber-700 text-teal-300 text-sm flex items-start gap-2">
               <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"

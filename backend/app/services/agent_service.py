@@ -727,7 +727,7 @@ class AgentService:
         all_defs.extend(TODO_TOOL_DEFINITIONS)
         return all_defs
 
-    def _build_instructions(self, tool_ids: list[str], custom_instructions: str = "") -> str:
+    def _build_instructions(self, tool_ids: list[str], custom_instructions: str = "", agent_id: str | None = None) -> str:
         """Build agent instructions based on enabled tool categories."""
         instructions = settings.agent_instructions
         if custom_instructions:
@@ -749,6 +749,7 @@ class AgentService:
             instructions += POLYMARKET_INSTRUCTIONS_SUFFIX
         if "notifications" in tool_ids:
             instructions += NOTIFICATION_INSTRUCTIONS_SUFFIX
+            instructions += self._build_distribution_group_instructions(agent_id)
         if "azure_costs" in tool_ids:
             instructions += AZURE_COST_INSTRUCTIONS_SUFFIX
         if "weather" in tool_ids:
@@ -835,7 +836,7 @@ class AgentService:
           so MCP and other dynamically-discovered tools stay in sync.
         """
         tool_defs = self._build_tool_definitions(tools)
-        instructions = self._build_instructions(tools, custom_instructions=custom_instructions)
+        instructions = self._build_instructions(tools, custom_instructions=custom_instructions, agent_id=agent_id)
 
         try:
             agent = self.get_foundry_agent(foundry_agent_id)
@@ -1214,6 +1215,7 @@ class AgentService:
                 agent_id=agent_id,
                 agent_name=self._get_agent_name(agent_id),
                 thread_id=thread_id,
+                notification_group_id=self._get_agent_notification_group_id(agent_id),
             )
         elif fn_name in AZURE_COST_TOOL_NAMES:
             return execute_azure_cost_tool(tool_name=fn_name, arguments=fn_args)
@@ -1280,6 +1282,53 @@ class AgentService:
             return doc.get("email_account_id") if doc else None
         except Exception:
             return None
+
+    def _get_agent_notification_group_id(self, agent_id: str) -> str | None:
+        """Look up the notification_group_id configured on this agent."""
+        try:
+            from app.services.agent_store import agent_store
+            doc = agent_store.get_agent(agent_id)
+            return doc.get("notification_group_id") if doc else None
+        except Exception:
+            return None
+
+    def _build_distribution_group_instructions(self, agent_id: str | None) -> str:
+        """Build dynamic instructions about distribution groups for the agent."""
+        try:
+            from app.services.user_service import user_service
+            groups = user_service.list_distribution_groups()
+            if not groups:
+                return ""
+
+            group_id = self._get_agent_notification_group_id(agent_id) if agent_id else None
+
+            if group_id and group_id != "auto":
+                # Fixed group — agent doesn't need to choose
+                group = next((g for g in groups if g["id"] == group_id), None)
+                if group:
+                    return (
+                        f"\n\nYour notifications are configured to send to the "
+                        f"\"{group['name']}\" distribution group "
+                        f"({', '.join(group.get('emails', []))})."
+                        f" You do not need to specify a distribution_group_id."
+                    )
+                return ""
+
+            # Auto mode — list all groups so the agent can choose
+            lines = [
+                "\n\nDistribution Groups available (use distribution_group_id parameter to target one):"
+            ]
+            for g in groups:
+                emails = ", ".join(g.get("emails", []))
+                desc = f" — {g['description']}" if g.get("description") else ""
+                lines.append(f"  - \"{g['name']}\" (id: {g['id']}){desc} [{emails}]")
+            lines.append(
+                "Choose the most appropriate group based on the notification content, "
+                "or omit distribution_group_id to send to all enabled channels."
+            )
+            return "\n".join(lines)
+        except Exception:
+            return ""
 
     # ── Thread-level locking & run conflict resolution ────────────
 
@@ -1400,7 +1449,7 @@ class AgentService:
         if provider in ("openai", "anthropic"):
             tool_ids = tools or []
             all_tool_defs = self._build_raw_tool_definitions(tool_ids)
-            instructions = self._build_instructions(tool_ids, custom_instructions=custom_instructions)
+            instructions = self._build_instructions(tool_ids, custom_instructions=custom_instructions, agent_id=agent_id)
 
             if provider == "openai":
                 from app.services.providers import openai_provider

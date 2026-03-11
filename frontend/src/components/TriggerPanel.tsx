@@ -414,7 +414,7 @@ export default function TriggerPanel({
                       onClick={() => setTriggerType("regular")}
                       className={`flex-1 flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm transition-colors ${
                         triggerType === "regular"
-                          ? "border-amber-500 bg-amber-900/30 text-amber-300"
+                          ? "border-amber-500 bg-amber-900/30 text-teal-300"
                           : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600"
                       }`}
                     >
@@ -474,7 +474,7 @@ export default function TriggerPanel({
                         }}
                         className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
                           interval === p.value && !customInterval
-                            ? "border-amber-500 bg-amber-900/30 text-amber-300"
+                            ? "border-amber-500 bg-amber-900/30 text-teal-300"
                             : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600"
                         }`}
                       >

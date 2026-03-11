@@ -4,9 +4,9 @@ import ChatView from "./components/ChatView";
 import ManagementPanel from "./components/ManagementPanel";
 import NotificationPanel from "./components/NotificationPanel";
 import OnboardingDialog from "./components/OnboardingDialog";
-import { fetchUnreadCount } from "./api/notification";
+import { fetchUnreadCount, fetchDistributionGroups } from "./api/notification";
 import { getOnboardingStatus } from "./api/settings";
-import type { Agent, Message, MCPServer, ToolStep, EmailAccount, EmailAccountCreate, AppSettings, TodoItem, ToolCatalogEntry } from "./types/chat";
+import type { Agent, Message, MCPServer, ToolStep, EmailAccount, EmailAccountCreate, AppSettings, TodoItem, ToolCatalogEntry, DistributionGroup } from "./types/chat";
 import {
   checkStatus,
   fetchAgents,
@@ -52,7 +52,7 @@ function App() {
   const [selectedModel, setSelectedModel] = useState("gpt-4.1-mini");
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
   const [showManagement, setShowManagement] = useState(false);
-  const [managementTab, setManagementTab] = useState<"tools" | "triggers" | "email" | "mcp" | "settings">("tools");
+  const [managementTab, setManagementTab] = useState<"tools" | "triggers" | "email" | "mcp" | "notifications" | "appearance" | "settings">("tools");
   const [streamingToolSteps, setStreamingToolSteps] = useState<ToolStep[]>([]);
   const streamingToolStepsRef = useRef<ToolStep[]>([]);
   const abortRef = useRef<AbortController | null>(null);
@@ -63,6 +63,8 @@ function App() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [disconnected, setDisconnected] = useState(false);
+  const [distributionGroups, setDistributionGroups] = useState<DistributionGroup[]>([]);
   const [agentBusy, setAgentBusy] = useState(false);
   const [streamingAgentId, setStreamingAgentId] = useState<string | null>(null);
   const [streamingTodos, setStreamingTodos] = useState<TodoItem[]>([]);
@@ -103,6 +105,7 @@ function App() {
       fetchMCPServers().then(setMcpServers).catch(() => {});
       fetchEmailAccounts().then(setEmailAccounts).catch(() => {});
       fetchToolCatalog().then(setToolCatalog).catch(() => {});
+      fetchDistributionGroups().then(setDistributionGroups).catch(() => {});
     };
 
     const tryStatus = (retries = 5) => {
@@ -201,12 +204,15 @@ function App() {
     return () => { cancelled = true; clearInterval(iv); };
   }, [activeId, activeAgent?.trigger?.active]);
 
-  // Poll unread notification count
+  // Poll unread notification count + connectivity check
   useEffect(() => {
-    fetchUnreadCount().then(setUnreadNotifications).catch(() => {});
-    const interval = setInterval(() => {
-      fetchUnreadCount().then(setUnreadNotifications).catch(() => {});
-    }, 15_000);
+    const poll = () => {
+      fetchUnreadCount()
+        .then((c) => { setUnreadNotifications(c); setDisconnected(false); })
+        .catch(() => setDisconnected(true));
+    };
+    poll();
+    const interval = setInterval(poll, 15_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -222,9 +228,9 @@ function App() {
     }
   }, [selectedModel]);
 
-  const handleNewAgentWithPrompt = useCallback(async (_prompt: string) => {
+  const handleNewAgentWithPrompt = useCallback(async (_prompt: string, tools?: string[]) => {
     try {
-      const agent = await createAgent({ model: selectedModel });
+      const agent = await createAgent({ model: selectedModel, ...(tools ? { tools } : {}) });
       setAgents((prev) => [agent, ...prev]);
       setActiveId(agent.id);
       setMessagesCache((prev) => ({ ...prev, [agent.id]: [] }));
@@ -554,6 +560,24 @@ function App() {
     [activeId, refreshAgent]
   );
 
+  const handleNotificationGroupChange = useCallback(
+    async (groupId: string | null) => {
+      if (!activeId) return;
+      setAgents((prev) =>
+        prev.map((a) => (a.id === activeId ? { ...a, notification_group_id: groupId } : a))
+      );
+      try {
+        const updated = await updateAgent(activeId, { notification_group_id: groupId });
+        setAgents((prev) =>
+          prev.map((a) => (a.id === updated.id ? updated : a))
+        );
+      } catch {
+        refreshAgent(activeId);
+      }
+    },
+    [activeId, refreshAgent]
+  );
+
   // --- MCP server handlers ---
   const handleAddMCP = useCallback(async (server: Omit<MCPServer, "id">) => {
     try {
@@ -723,6 +747,15 @@ function App() {
 
   return (
     <div className="app-shell flex h-screen text-[#f6efc9]">
+      {/* Disconnection banner */}
+      {disconnected && (
+        <div className="fixed top-0 left-0 right-0 z-[100] flex items-center justify-center gap-2 px-4 py-2 bg-red-900/90 border-b border-red-700/50 text-red-200 text-xs backdrop-blur-sm">
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          <span>Connection to backend lost — retrying automatically</span>
+        </div>
+      )}
       {showOnboarding && (
         <OnboardingDialog onComplete={handleOnboardingComplete} />
       )}
@@ -735,8 +768,6 @@ function App() {
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         onOpenSettings={() => { setManagementTab("settings"); setShowManagement(true); }}
-        onOpenNotifications={() => setShowNotifications(true)}
-        unreadNotifications={unreadNotifications}
       />
       <ChatView
         messages={currentMessages}
@@ -755,7 +786,7 @@ function App() {
         models={models}
         selectedModel={selectedModel}
         onModelChange={handleModelChange}
-        onOpenManagement={(tab) => { setManagementTab(tab as "tools" | "triggers" | "email" | "mcp" | "settings"); setShowManagement(true); }}
+        onOpenManagement={(tab) => { setManagementTab(tab as "tools" | "triggers" | "email" | "mcp" | "notifications" | "appearance" | "settings"); setShowManagement(true); }}
         onRenameAgent={handleRenameAgent}
         onToolsChange={handleToolsChange}
         toolLibrary={toolLibrary}
@@ -766,11 +797,15 @@ function App() {
         onNewAgentWithPrompt={handleNewAgentWithPrompt}
         toolCatalog={toolCatalog}
         onCustomInstructionsChange={handleCustomInstructionsChange}
+        distributionGroups={distributionGroups}
+        onNotificationGroupChange={handleNotificationGroupChange}
+        onOpenNotifications={() => setShowNotifications(true)}
+        unreadNotifications={unreadNotifications}
       />
       {showManagement && (
         <ManagementPanel
           defaultTab={managementTab}
-          onClose={() => setShowManagement(false)}
+          onClose={() => { setShowManagement(false); fetchDistributionGroups().then(setDistributionGroups).catch(() => {}); }}
           emailAccounts={emailAccounts}
           onToolLibraryChange={(lib) => setToolLibrary(lib)}
           agents={agents}

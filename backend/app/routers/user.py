@@ -19,6 +19,9 @@ from app.models.user import (
     NotificationChannelCreate,
     NotificationChannelUpdate,
     NotificationChannelResponse,
+    DistributionGroupCreate,
+    DistributionGroupUpdate,
+    DistributionGroupResponse,
 )
 from app.services.user_service import user_service
 
@@ -53,6 +56,10 @@ def get_preferences():
         notification_channels=[
             NotificationChannelResponse(**c)
             for c in user_service.list_notification_channels()
+        ],
+        distribution_groups=[
+            DistributionGroupResponse(**g)
+            for g in user_service.list_distribution_groups()
         ],
     )
 
@@ -142,6 +149,46 @@ def test_notification_channel(channel_id: str):
     return {"success": False, "message": f"Unknown channel type: {channel['type']}"}
 
 
+# ── Distribution groups ───────────────────────────────────────────
+
+@router.get("/distribution-groups", response_model=list[DistributionGroupResponse])
+def list_distribution_groups():
+    _require_ready()
+    groups = user_service.list_distribution_groups()
+    return [DistributionGroupResponse(**g) for g in groups]
+
+
+@router.post("/distribution-groups", response_model=DistributionGroupResponse, status_code=201)
+def add_distribution_group(body: DistributionGroupCreate):
+    _require_ready()
+    try:
+        g = user_service.add_distribution_group(
+            name=body.name,
+            description=body.description,
+            emails=body.emails,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return DistributionGroupResponse(**g)
+
+
+@router.patch("/distribution-groups/{group_id}", response_model=DistributionGroupResponse)
+def update_distribution_group(group_id: str, body: DistributionGroupUpdate):
+    _require_ready()
+    updates = body.model_dump(exclude_none=True)
+    g = user_service.update_distribution_group(group_id, updates)
+    if not g:
+        raise HTTPException(404, "Distribution group not found")
+    return DistributionGroupResponse(**g)
+
+
+@router.delete("/distribution-groups/{group_id}", status_code=204)
+def delete_distribution_group(group_id: str):
+    _require_ready()
+    if not user_service.delete_distribution_group(group_id):
+        raise HTTPException(404, "Distribution group not found")
+
+
 @router.get("/tools", response_model=list[ToolPreference])
 def get_tool_preferences():
     """Get tool enabled/disabled preferences."""
@@ -164,12 +211,37 @@ def update_tool_preference(body: ToolPreferencesUpdate):
 def get_tool_catalog():
     """Return all available tools with their metadata and library status."""
     _require_ready()
-    from app.services.agent_service import TOOL_CATALOG_META
+    from app.services.agent_service import TOOL_CATALOG_META, TOOL_CATALOG
+    from app.models.user import ToolFunctionInfo, ToolFunctionParam
 
     library = user_service.get_tool_library()
     email_accounts = user_service.list_email_accounts_safe()
     email_configured = len(email_accounts) > 0
     imap_configured = email_configured and any(bool(a.get("imap_host")) for a in email_accounts)
+
+    def _extract_functions(tool_id: str) -> list[ToolFunctionInfo]:
+        """Build ToolFunctionInfo list from TOOL_CATALOG definitions."""
+        defs = TOOL_CATALOG.get(tool_id, [])
+        funcs = []
+        for d in defs:
+            params_schema = d.get("parameters", {})
+            props = params_schema.get("properties", {})
+            req_set = set(params_schema.get("required", []))
+            params = [
+                ToolFunctionParam(
+                    name=pname,
+                    type=pinfo.get("type", "string"),
+                    description=pinfo.get("description", ""),
+                    required=pname in req_set,
+                )
+                for pname, pinfo in props.items()
+            ]
+            funcs.append(ToolFunctionInfo(
+                name=d.get("name", ""),
+                description=d.get("description", ""),
+                parameters=params,
+            ))
+        return funcs
 
     entries = []
     for tool_id, meta in TOOL_CATALOG_META.items():
@@ -189,6 +261,7 @@ def get_tool_catalog():
             available=available,
             requires_config=meta.get("requires_config", False),
             provider_only=meta.get("provider_only", ""),
+            tools=_extract_functions(tool_id),
         ))
 
     # Inject active MCP servers as tool catalog entries

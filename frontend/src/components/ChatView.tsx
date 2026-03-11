@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
-import type { Message, AgentTrigger, Agent, ToolStep, MCPServer, TodoItem, EmailAccount, ToolCatalogEntry } from "../types/chat";
+import type { Message, AgentTrigger, Agent, ToolStep, MCPServer, TodoItem, EmailAccount, ToolCatalogEntry, DistributionGroup } from "../types/chat";
 import ModelSelector from "./ModelSelector";
 
 /* ── Instant Tooltip ─────────────────────────────────────────── */
@@ -8,7 +8,7 @@ function Tooltip({ text, children }: { text?: string; children: ReactNode }) {
   return (
     <div className="relative group/tip">
       {children}
-      <div className="terminal-panel pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap px-2.5 py-1 text-[11px] text-[#dcca8a] opacity-0 scale-95 group-hover/tip:opacity-100 group-hover/tip:scale-100 transition-all duration-150 shadow-lg">
+      <div className="terminal-panel pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap px-2.5 py-1 text-[11px] text-[#8adcca] opacity-0 scale-95 group-hover/tip:opacity-100 group-hover/tip:scale-100 transition-all duration-150 shadow-lg">
         {text}
         <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-[#6a5421]" />
       </div>
@@ -41,9 +41,13 @@ interface ChatViewProps {
   agentBusy?: boolean;
   emailAccounts: EmailAccount[];
   onEmailAccountChange: (accountId: string | null) => void;
-  onNewAgentWithPrompt: (prompt: string) => void;
+  onNewAgentWithPrompt: (prompt: string, tools?: string[]) => void;
   toolCatalog: ToolCatalogEntry[];
   onCustomInstructionsChange: (instructions: string) => void;
+  distributionGroups: DistributionGroup[];
+  onNotificationGroupChange: (groupId: string | null) => void;
+  onOpenNotifications: () => void;
+  unreadNotifications: number;
 }
 
 export default function ChatView({
@@ -74,6 +78,10 @@ export default function ChatView({
   onNewAgentWithPrompt,
   toolCatalog,
   onCustomInstructionsChange,
+  distributionGroups,
+  onNotificationGroupChange,
+  onOpenNotifications,
+  unreadNotifications,
 }: ChatViewProps) {
   const [input, setInput] = useState("");
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
@@ -207,7 +215,7 @@ export default function ChatView({
       <div className="app-content flex-1 flex flex-col items-center justify-center px-4 relative">
         <button
           onClick={onToggleSidebar}
-          className="absolute top-4 left-4 p-2 text-[#b8ad78] hover:text-[#fff0b0] md:hidden"
+          className="absolute top-4 left-4 p-2 text-[#78adb8] hover:text-[#b0f0e8] md:hidden"
         >
           <svg
             className="w-6 h-6"
@@ -238,19 +246,19 @@ export default function ChatView({
         <div className="terminal-panel terminal-dot-grid mb-3 w-full max-w-2xl overflow-hidden rounded-md">
           <div className="terminal-titlebar">cronosaurus :: terminal</div>
           <div className="flex items-center gap-4 px-5 py-5">
-            <img src="/logo.png" alt="Cronosaurus" className="h-12 w-12 rounded-md border border-amber-200/15 shadow-[0_0_0_1px_rgba(242,194,48,0.12)]" />
+            <img src="/logo.png" alt="Cronosaurus" className="h-12 w-12 rounded-md border border-teal-200/15 shadow-[0_0_0_1px_rgba(242,194,48,0.12)]" />
             <div>
-              <h1 className="brand-display text-4xl font-bold text-[#fff0b0]">Cronosaurus</h1>
+              <h1 className="brand-display text-4xl font-bold text-[#b0f0e8]">Cronosaurus</h1>
               <p className="mt-1 text-xs uppercase tracking-[0.22em] text-[#97ff8a]">interactive agent console</p>
             </div>
           </div>
         </div>
-        <p className="mb-6 text-lg text-[#b8ad78]">
+        <p className="mb-6 text-lg text-[#78adb8]">
           Create an agent or try an example below
         </p>
         {models.length > 0 && (
           <div className="mb-6 flex items-center gap-3">
-            <span className="text-sm text-[#c3b884]">Model:</span>
+            <span className="text-sm text-[#84b8c3]">Model:</span>
             <ModelSelector
               models={models}
               selectedModel={selectedModel}
@@ -274,40 +282,44 @@ export default function ChatView({
               title: "Website change monitor",
               desc: "Scrape a website on a schedule and get email alerts when content changes",
               prompt: "Set up a recurring trigger that checks https://example.com every 30 minutes using web_fetch. Compare the page content with the previous version and send me an email notification if anything meaningful changed. Summarize what's different.",
+              tools: ["web_search", "triggers", "email_send", "notifications"],
             },
             {
               icon: "💰",
               title: "Azure cost digest",
               desc: "Get a daily summary of your Azure spending delivered to your inbox",
               prompt: "Create a daily trigger (every 1440 minutes) that pulls my Azure cost overview by resource group for the current month, formats it as a clean summary with totals and top spenders, and sends it to me via email with the subject 'Daily Azure Cost Report'.",
+              tools: ["azure_costs", "triggers", "email_send"],
             },
             {
               icon: "📈",
               title: "Crypto price alerts",
               desc: "Monitor crypto prices and notify you when thresholds are hit",
               prompt: "Set up a trigger that runs every 15 minutes to check the price of BTC and ETH. If BTC drops below $90,000 or ETH drops below $3,000, send me a notification with the current prices and percentage change. Include a brief market context from a web search.",
+              tools: ["crypto", "triggers", "notifications", "web_search"],
             },
             {
               icon: "🔗",
               title: "Multi-source intelligence brief",
               desc: "Combine web scraping, market data, and email into an automated daily brief",
               prompt: "Create a daily trigger that: 1) Searches the web for the latest AI industry news, 2) Gets the current prices of BTC, ETH, and SOL, 3) Checks my Azure spending for today, and 4) Compiles everything into a clean morning briefing email with sections for News, Markets, and Cloud Costs. Send it with the subject 'Morning Intelligence Brief'.",
+              tools: ["web_search", "crypto", "azure_costs", "triggers", "email_send", "notifications"],
             },
           ].map((example, i) => (
             <button
               key={i}
               onClick={() => {
                 setPendingPrompt(example.prompt);
-                onNewAgentWithPrompt(example.prompt);
+                onNewAgentWithPrompt(example.prompt, example.tools);
               }}
-              className="terminal-control w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-[#1b160f] group"
+              className="terminal-control w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-[#0f161b] group"
             >
               <span className="text-lg mt-0.5 shrink-0">{example.icon}</span>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-[#f6efc9] group-hover:text-[#fff0b0]">{example.title}</div>
-                <div className="text-xs text-[#8b7f59] mt-0.5 group-hover:text-[#b8ad78]">{example.desc}</div>
+                <div className="text-sm font-medium text-[#c9f6ef] group-hover:text-[#b0f0e8]">{example.title}</div>
+                <div className="text-xs text-[#597f8b] mt-0.5 group-hover:text-[#78adb8]">{example.desc}</div>
               </div>
-              <svg className="w-4 h-4 text-[#5f4c1d] group-hover:text-[#97ff8a] shrink-0 mt-1 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-[#1d4c5f] group-hover:text-[#97ff8a] shrink-0 mt-1 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
             </button>
@@ -318,7 +330,7 @@ export default function ChatView({
           <span className="terminal-chip px-3 py-1 text-xs">
             Foundry Agent
           </span>
-          <span className="terminal-chip border-lime-300/20 bg-[#12180f] text-[#b8d289] px-3 py-1 text-xs">
+          <span className="terminal-chip border-lime-300/20 bg-[#0f1812] text-[#89b8d2] px-3 py-1 text-xs">
             Streaming
           </span>
           <span className="terminal-chip border-stone-300/10 bg-[#171511] text-[#d7cab1] px-3 py-1 text-xs">
@@ -338,7 +350,7 @@ export default function ChatView({
       <div className="terminal-panel mx-3 mt-3 flex items-center gap-3 px-4 py-3">
         <button
           onClick={onToggleSidebar}
-          className="p-1.5 text-[#b8ad78] hover:text-[#fff0b0] md:hidden"
+          className="p-1.5 text-[#78adb8] hover:text-[#b0f0e8] md:hidden"
         >
           <svg
             className="w-5 h-5"
@@ -363,20 +375,6 @@ export default function ChatView({
             disabled={isStreaming}
           />
         )}
-        {/* Tools dropdown */}
-        {activeAgent && (
-          <ToolsDropdown
-            tools={activeAgent.tools}
-            onChange={onToolsChange}
-            toolLibrary={toolLibrary}
-            mcpServers={mcpServers}
-            onOpenManagement={onOpenManagement}
-            emailAccounts={emailAccounts}
-            selectedEmailAccountId={activeAgent.email_account_id}
-            onEmailAccountChange={onEmailAccountChange}
-            toolCatalog={toolCatalog}
-          />
-        )}
         {/* Agent instructions button */}
         <Tooltip text="Agent instructions">
           <button
@@ -386,8 +384,8 @@ export default function ChatView({
             }}
             className={`terminal-control p-1.5 transition-colors ${
               activeAgent.custom_instructions
-                ? "text-[#97ff8a] bg-[#121a0f] hover:bg-[#1a2515]"
-                : "text-[#8b7f59] hover:text-[#dcca8a] hover:bg-[#18130d]"
+                ? "text-[#97ff8a] bg-[#0f1a12] hover:bg-[#1a2515]"
+                : "text-[#597f8b] hover:text-[#8adcca] hover:bg-[#0d1318]"
             }`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -401,10 +399,10 @@ export default function ChatView({
           onClick={() => onOpenManagement("triggers")}
           className={`terminal-control p-1.5 transition-colors ${
             activeAgent.trigger?.active
-              ? "text-amber-300 bg-[#22190d] hover:bg-[#2d2110]"
+              ? "text-teal-300 bg-[#22190d] hover:bg-[#2d2110]"
               : activeAgent.trigger
-                ? "text-[#8b7f59] hover:text-[#dcca8a] hover:bg-[#18130d]"
-                : "text-[#8b7f59] hover:text-[#dcca8a] hover:bg-[#18130d]"
+                ? "text-[#597f8b] hover:text-[#8adcca] hover:bg-[#0d1318]"
+                : "text-[#597f8b] hover:text-[#8adcca] hover:bg-[#0d1318]"
           }`}
           title={
             activeAgent.trigger?.active
@@ -433,6 +431,24 @@ export default function ChatView({
             Agent not connected
           </span>
         )}
+        {/* Spacer to push notification bell to the right */}
+        <div className="flex-1" />
+        {/* Notification bell */}
+        <button
+          onClick={onOpenNotifications}
+          className="relative terminal-control p-1.5 text-[#597f8b] hover:text-[#8adcca] hover:bg-[#0d1318] transition-colors"
+          title="Notifications"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+          </svg>
+          {unreadNotifications > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] flex items-center justify-center px-0.5 text-[9px] font-bold text-white bg-red-500 rounded-full">
+              {unreadNotifications > 99 ? "99+" : unreadNotifications}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Trigger status bar */}
@@ -454,11 +470,11 @@ export default function ChatView({
         <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
           {messagesLoading && messages.length === 0 && (
             <div className="flex items-center justify-center py-20">
-              <svg className="animate-spin h-6 w-6 text-[#dcca8a]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <svg className="animate-spin h-6 w-6 text-[#8adcca]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              <span className="ml-3 text-sm text-[#b8ad78]">Loading conversation log…</span>
+              <span className="ml-3 text-sm text-[#78adb8]">Loading conversation log…</span>
             </div>
           )}
           {messages.map((msg, i) => (
@@ -474,7 +490,7 @@ export default function ChatView({
               <div className="flex gap-3 ml-10">
                 <button
                   onClick={() => onSend("yes")}
-                  className="terminal-control border-lime-300/20 bg-[#12180f] px-4 py-2 text-[#97ff8a] text-sm font-medium transition-colors flex items-center gap-1.5"
+                  className="terminal-control border-lime-300/20 bg-[#0f1812] px-4 py-2 text-[#97ff8a] text-sm font-medium transition-colors flex items-center gap-1.5"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -483,7 +499,7 @@ export default function ChatView({
                 </button>
                 <button
                   onClick={() => onSend("no")}
-                  className="terminal-control px-4 py-2 text-[#dcca8a] text-sm font-medium transition-colors flex items-center gap-1.5"
+                  className="terminal-control px-4 py-2 text-[#8adcca] text-sm font-medium transition-colors flex items-center gap-1.5"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -561,11 +577,10 @@ export default function ChatView({
       <div className="p-3 pt-0">
         <div className="max-w-3xl mx-auto">
           <div
-            className="terminal-panel terminal-dot-grid overflow-hidden"
+            className="terminal-panel overflow-hidden rounded-2xl"
             onDrop={handleDrop}
             onDragOver={(e) => e.preventDefault()}
           >
-            <div className="terminal-titlebar">command input</div>
 
             {/* Image preview strip */}
             {attachedImages.length > 0 && (
@@ -575,11 +590,11 @@ export default function ChatView({
                     <img
                       src={img.preview}
                       alt={`Attachment ${i + 1}`}
-                      className="h-16 w-16 object-cover border border-[#f2c230]/20"
+                      className="h-16 w-16 object-cover border border-[#3dd8c5]/20"
                     />
                     <button
                       onClick={() => setAttachedImages((prev) => prev.filter((_, j) => j !== i))}
-                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#1a1510] border border-[#f2c230]/30 text-[#dcca8a] hover:text-red-400 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#1a1510] border border-[#3dd8c5]/30 text-[#8adcca] hover:text-red-400 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       ×
                     </button>
@@ -589,7 +604,23 @@ export default function ChatView({
             )}
 
             <div className="flex items-end gap-3 px-4 py-3">
-              <span className="terminal-label pb-1 text-[#97ff8a]">&gt;</span>
+              {/* Tools button — inline next to input */}
+              {activeAgent && (
+                <ToolsDropdown
+                  tools={activeAgent.tools}
+                  onChange={onToolsChange}
+                  toolLibrary={toolLibrary}
+                  mcpServers={mcpServers}
+                  onOpenManagement={onOpenManagement}
+                  emailAccounts={emailAccounts}
+                  selectedEmailAccountId={activeAgent.email_account_id}
+                  onEmailAccountChange={onEmailAccountChange}
+                  toolCatalog={toolCatalog}
+                  distributionGroups={distributionGroups}
+                  selectedNotificationGroupId={activeAgent.notification_group_id}
+                  onNotificationGroupChange={onNotificationGroupChange}
+                />
+              )}
             <textarea
               ref={textareaRef}
               value={input}
@@ -598,14 +629,14 @@ export default function ChatView({
               onPaste={handlePaste}
               placeholder="type a command, question, or directive — paste or drop images"
               rows={1}
-              className="flex-1 bg-transparent text-[#f6efc9] placeholder-[#786d48] resize-none
+              className="flex-1 bg-transparent text-[#c9f6ef] placeholder-[#486d78] resize-none
                 focus:outline-none text-sm leading-6 max-h-[200px]"
             />
             {isStreaming && !input.trim() ? (
               /* Stop button — shown while streaming and input is empty */
               <button
                 onClick={onStop}
-                className="terminal-control p-2 text-[#dcca8a] hover:bg-[#1d1710]
+                className="terminal-control p-2 text-[#8adcca] hover:bg-[#1d1710]
                   transition-colors shrink-0"
                 title="Stop generating"
               >
@@ -632,7 +663,7 @@ export default function ChatView({
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="terminal-control p-2 text-[#8b7f59] hover:text-[#dcca8a] hover:bg-[#1d1710]
+                className="terminal-control p-2 text-[#597f8b] hover:text-[#8adcca] hover:bg-[#1d1710]
                   transition-colors shrink-0"
                 title="Attach image"
               >
@@ -667,7 +698,7 @@ export default function ChatView({
             )}
             </div>
           </div>
-          <p className="text-xs text-[#786d48] text-center mt-2 uppercase tracking-[0.16em] flex items-center justify-center gap-3">
+          <p className="text-xs text-[#486d78] text-center mt-2 uppercase tracking-[0.16em] flex items-center justify-center gap-3">
             <span>session target: microsoft foundry agent service</span>
             {tokenInfo && tokenInfo.limit > 0 && (
               <span className="inline-flex items-center gap-1.5 normal-case tracking-normal">
@@ -704,27 +735,27 @@ export default function ChatView({
           <div className="terminal-panel mx-4 resize overflow-auto" style={{ width: 540, minWidth: 320, minHeight: 280, maxWidth: '90vw', maxHeight: '90vh' }}>
             <div className="terminal-titlebar flex items-center justify-between">
               <span>agent instructions</span>
-              <button onClick={() => setShowInstructionsDialog(false)} className="text-[#8b7f59] hover:text-[#dcca8a] transition-colors">
+              <button onClick={() => setShowInstructionsDialog(false)} className="text-[#597f8b] hover:text-[#8adcca] transition-colors">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
             <div className="p-4 space-y-3">
-              <p className="text-xs text-[#8b7f59]">
+              <p className="text-xs text-[#597f8b]">
                 Custom instructions that shape how this agent behaves. These are prepended to the system prompt.
               </p>
               <textarea
                 value={instructionsDraft}
                 onChange={(e) => setInstructionsDraft(e.target.value)}
                 placeholder="e.g. Always respond in Spanish. Be concise and use bullet points."
-                className="w-full bg-[#0d0b08] border border-[#3d3520] rounded px-3 py-2 text-sm text-[#f6efc9] placeholder-[#5f4c1d] resize-y focus:outline-none focus:border-[#6a5421]"
+                className="w-full bg-[#0d0b08] border border-[#3d3520] rounded px-3 py-2 text-sm text-[#c9f6ef] placeholder-[#1d4c5f] resize-y focus:outline-none focus:border-[#6a5421]"
                 style={{ minHeight: 120, height: 200 }}
               />
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setShowInstructionsDialog(false)}
-                  className="terminal-control px-3 py-1.5 text-xs text-[#8b7f59] hover:text-[#dcca8a]"
+                  className="terminal-control px-3 py-1.5 text-xs text-[#597f8b] hover:text-[#8adcca]"
                 >
                   Cancel
                 </button>
@@ -814,7 +845,7 @@ function TriggerStatusBar({
     return `${d}d${rem ? ` ${Math.floor(rem / 60)}h` : ""}`;
   }, [trigger.interval_minutes, isGmailPush]);
 
-  const accentActive = isGmailPush ? "terminal-panel text-red-300 hover:bg-red-950/30" : "terminal-panel text-[#dcca8a] hover:bg-[#18130d]";
+  const accentActive = isGmailPush ? "terminal-panel text-red-300 hover:bg-red-950/30" : "terminal-panel text-[#8adcca] hover:bg-[#0d1318]";
   const dotColor = isGmailPush ? "bg-red-400" : "bg-amber-400";
 
   return (
@@ -825,7 +856,7 @@ function TriggerStatusBar({
         ${
           trigger.active
             ? accentActive
-            : "terminal-panel text-[#8b7f59] hover:bg-[#18130d]"
+            : "terminal-panel text-[#597f8b] hover:bg-[#0d1318]"
         }
       `}
     >
@@ -1010,6 +1041,9 @@ function ToolsDropdown({
   selectedEmailAccountId,
   onEmailAccountChange,
   toolCatalog,
+  distributionGroups,
+  selectedNotificationGroupId,
+  onNotificationGroupChange,
 }: {
   tools: string[];
   onChange: (tools: string[]) => void;
@@ -1020,6 +1054,9 @@ function ToolsDropdown({
   selectedEmailAccountId: string | null;
   onEmailAccountChange: (accountId: string | null) => void;
   toolCatalog: ToolCatalogEntry[];
+  distributionGroups: DistributionGroup[];
+  selectedNotificationGroupId: string | null;
+  onNotificationGroupChange: (groupId: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -1092,21 +1129,22 @@ function ToolsDropdown({
         onClick={() => setOpen(!open)}
         className={`terminal-control p-1.5 transition-colors ${
           open
-            ? "bg-[#22190e] text-[#fff0b0]"
-            : "text-[#8b7f59] hover:text-[#dcca8a] hover:bg-[#18130d]"
+            ? "bg-[#0e1922] text-[#b0f0e8]"
+            : "text-[#597f8b] hover:text-[#8adcca] hover:bg-[#0d1318]"
         }`}
         title="Agent tools"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M11.42 15.17l-5.1-3.56a1 1 0 00-.86-.08l-2.86.94a1 1 0 01-1.28-.7l-.54-2.26a1 1 0 01.7-1.19l2.89-.78a1 1 0 00.65-.54l1.35-2.88a1 1 0 011.56-.35l2.18 1.9a1 1 0 00.88.2l2.92-.62a1 1 0 011.13.76l.54 2.26a1 1 0 01-.44 1.08l-2.44 1.56a1 1 0 00-.46.76l-.16 2.97a1 1 0 01-1.14.92l-2.26-.42a1 1 0 00-.68.12z" />
+            d="M21.75 6.75a4.5 4.5 0 01-4.884 4.484c-1.076-.091-2.264.071-2.95.904l-7.152 8.684a2.548 2.548 0 11-3.586-3.586l8.684-7.152c.833-.686.995-1.874.904-2.95a4.5 4.5 0 016.336-4.486l-3.276 3.276a3.004 3.004 0 002.25 2.25l3.276-3.276c.256.565.398 1.192.398 1.852z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.867 19.125h.008v.008h-.008v-.008z" />
         </svg>
       </button>
       {/* Badge */}
       {(() => {
         const visibleEnabled = tools.filter(t => availableTools.some(at => at.id === t)).length;
         return visibleEnabled > 0 && !open ? (
-          <span className="absolute -top-1 -right-1 w-4 h-4 text-[9px] font-bold flex items-center justify-center rounded-full bg-[#97ff8a] text-[#120f07] pointer-events-none">
+          <span className="absolute -top-1 -right-1 w-4 h-4 text-[9px] font-bold flex items-center justify-center rounded-full bg-[#97ff8a] text-[#071210] pointer-events-none">
             {visibleEnabled}
           </span>
         ) : null;
@@ -1127,14 +1165,14 @@ function ToolsDropdown({
             {/* Panel */}
             <div
               ref={menuRef}
-              className="absolute top-0 left-0 bottom-0 w-full max-w-md app-sidebar border-r border-[#f2c230]/18 shadow-2xl flex flex-col animate-slide-in-left pointer-events-auto"
+              className="absolute top-0 left-0 bottom-0 w-full max-w-md app-sidebar border-r border-[#3dd8c5]/18 shadow-2xl flex flex-col animate-slide-in-left pointer-events-auto"
               style={{ animationDuration: '150ms' }}
             >
             <div className="terminal-titlebar px-4">
               <span className="flex-1">agent tools</span>
               <button
                 onClick={() => setOpen(false)}
-                className="text-[#786d48] hover:text-[#dcca8a] transition-colors ml-auto"
+                className="text-[#486d78] hover:text-[#8adcca] transition-colors ml-auto"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1142,9 +1180,9 @@ function ToolsDropdown({
               </button>
             </div>
 
-            <div className="px-4 py-3 border-b border-[#f2c230]/10">
-              <span className="text-xs font-medium text-[#b8ad78] uppercase tracking-wider">toggle capabilities</span>
-              <span className="text-xs text-[#786d48] ml-2">({availableTools.length} available)</span>
+            <div className="px-4 py-3 border-b border-[#3dd8c5]/10">
+              <span className="text-xs font-medium text-[#78adb8] uppercase tracking-wider">toggle capabilities</span>
+              <span className="text-xs text-[#486d78] ml-2">({availableTools.length} available)</span>
             </div>
 
             {/* Scrollable tool list */}
@@ -1159,12 +1197,12 @@ function ToolsDropdown({
                   <div key={tool.id}>
                     <button
                       onClick={() => toggle(tool.id)}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#1b160f] transition-colors"
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#0f161b] transition-colors"
                     >
-                      <span className={`shrink-0 ${enabled ? "text-[#97ff8a]" : "text-[#786d48]"}`}>{tool.icon}</span>
+                      <span className={`shrink-0 ${enabled ? "text-[#97ff8a]" : "text-[#486d78]"}`}>{tool.icon}</span>
                       <div className="flex-1 text-left min-w-0">
-                        <div className={`text-sm ${enabled ? "text-[#f6efc9]" : "text-[#9b8f64]"}`}>{tool.label}</div>
-                        <div className="text-xs text-[#6d6242] truncate">
+                        <div className={`text-sm ${enabled ? "text-[#c9f6ef]" : "text-[#649b8f]"}`}>{tool.label}</div>
+                        <div className="text-xs text-[#426d6d] truncate">
                           {isEmailTool && activeAccount
                             ? activeAccount.from_email || activeAccount.label
                             : tool.description}
@@ -1172,11 +1210,11 @@ function ToolsDropdown({
                       </div>
                       <div
                         className={`w-9 h-5 transition-colors relative flex-shrink-0 border ${
-                          enabled ? "bg-[#152212] border-[#97ff8a]/40" : "bg-[#16120c] border-[#5f4c1d]"
+                          enabled ? "bg-[#122215] border-[#97ff8a]/40" : "bg-[#16120c] border-[#1d4c5f]"
                         }`}
                       >
                         <span
-                          className={`absolute top-0.5 w-4 h-4 bg-[#f6efc9] shadow transition-transform ${
+                          className={`absolute top-0.5 w-4 h-4 bg-[#c9f6ef] shadow transition-transform ${
                             enabled ? "left-[18px]" : "left-0.5"
                           }`}
                         />
@@ -1189,7 +1227,7 @@ function ToolsDropdown({
 
             {/* Email account selector */}
             {emailAccounts.length > 1 && tools.some(t => t === "email_send" || t === "email_read") && (
-              <div className="px-4 py-3 border-t border-[#f2c230]/10">
+              <div className="px-4 py-3 border-t border-[#3dd8c5]/10">
                 <div className="terminal-label text-[#97ff8a] mb-2">email account</div>
                 <div className="space-y-1">
                   {emailAccounts.map(acct => {
@@ -1202,14 +1240,14 @@ function ToolsDropdown({
                         onClick={() => onEmailAccountChange(acct.id)}
                         className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
                           isSelected
-                            ? "terminal-control bg-[#152212] border-[#97ff8a]/30 text-[#e0f5d0]"
-                            : "terminal-control text-[#9b8f64] hover:bg-[#1b160f] hover:text-[#dcca8a]"
+                            ? "terminal-control bg-[#122215] border-[#97ff8a]/30 text-[#e0f5d0]"
+                            : "terminal-control text-[#649b8f] hover:bg-[#0f161b] hover:text-[#8adcca]"
                         }`}
                       >
-                        <span className={`w-2 h-2 shrink-0 ${isSelected ? "bg-[#97ff8a]" : "bg-[#5f4c1d]"}`} />
+                        <span className={`w-2 h-2 shrink-0 ${isSelected ? "bg-[#97ff8a]" : "bg-[#1d4c5f]"}`} />
                         <div className="flex-1 min-w-0">
                           <div className="text-xs font-medium truncate">{acct.label || acct.from_email}</div>
-                          {acct.label && <div className="text-[10px] text-[#786d48] truncate">{acct.from_email}</div>}
+                          {acct.label && <div className="text-[10px] text-[#486d78] truncate">{acct.from_email}</div>}
                         </div>
                         {acct.is_default && !selectedEmailAccountId && (
                           <span className="terminal-chip text-[9px] px-1.5 py-0.5 text-[#97ff8a]">default</span>
@@ -1226,11 +1264,82 @@ function ToolsDropdown({
               </div>
             )}
 
+            {/* Distribution group selector */}
+            {tools.includes("notifications") && (
+              <div className="px-4 py-3 border-t border-[#3dd8c5]/10">
+                <div className="terminal-label text-[#97ff8a] mb-2">notification group</div>
+                {distributionGroups.length > 0 ? (
+                <div className="space-y-1">
+                  {/* Auto option */}
+                  <button
+                    onClick={() => onNotificationGroupChange("auto")}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
+                      !selectedNotificationGroupId || selectedNotificationGroupId === "auto"
+                        ? "terminal-control bg-[#122215] border-[#97ff8a]/30 text-[#e0f5d0]"
+                        : "terminal-control text-[#649b8f] hover:bg-[#0f161b] hover:text-[#8adcca]"
+                    }`}
+                  >
+                    <span className={`w-2 h-2 shrink-0 ${
+                      !selectedNotificationGroupId || selectedNotificationGroupId === "auto"
+                        ? "bg-[#97ff8a]" : "bg-[#1d4c5f]"
+                    }`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium">Auto</div>
+                      <div className="text-[10px] text-[#486d78]">Agent decides which group fits best</div>
+                    </div>
+                    {(!selectedNotificationGroupId || selectedNotificationGroupId === "auto") && (
+                      <svg className="w-3.5 h-3.5 text-[#97ff8a] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                  {/* Distribution groups */}
+                  {distributionGroups.map((g) => {
+                    const isSelected = selectedNotificationGroupId === g.id;
+                    return (
+                      <button
+                        key={g.id}
+                        onClick={() => onNotificationGroupChange(g.id)}
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
+                          isSelected
+                            ? "terminal-control bg-[#122215] border-[#97ff8a]/30 text-[#e0f5d0]"
+                            : "terminal-control text-[#649b8f] hover:bg-[#0f161b] hover:text-[#8adcca]"
+                        }`}
+                      >
+                        <span className={`w-2 h-2 shrink-0 ${isSelected ? "bg-[#97ff8a]" : "bg-[#1d4c5f]"}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium truncate">{g.name}</div>
+                          {g.description && <div className="text-[10px] text-[#486d78] truncate">{g.description}</div>}
+                          <div className="text-[10px] text-[#305a5a] truncate">{g.emails.join(", ")}</div>
+                        </div>
+                        {isSelected && (
+                          <svg className="w-3.5 h-3.5 text-[#97ff8a] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                ) : (
+                  <button
+                    onClick={() => { setOpen(false); onOpenManagement("notifications"); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 terminal-control text-[#649b8f] hover:bg-[#0f161b] hover:text-[#8adcca] text-left transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                    <div className="text-xs">Create distribution groups in settings…</div>
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Footer */}
-            <div className="border-t border-[#f2c230]/10">
+            <div className="border-t border-[#3dd8c5]/10">
               <button
                 onClick={() => { setOpen(false); onOpenManagement("tools"); }}
-                className="w-full flex items-center gap-2 px-4 py-3 text-xs text-[#97ff8a] hover:text-[#c3ffba] hover:bg-[#18130d] transition-colors"
+                className="w-full flex items-center gap-2 px-4 py-3 text-xs text-[#97ff8a] hover:text-[#c3ffba] hover:bg-[#0d1318] transition-colors"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
@@ -1290,12 +1399,12 @@ function AgentNameEditor({
 
   return (
     <div className="flex items-center gap-1.5 group">
-      <span className="text-sm text-[#f6efc9] truncate max-w-[200px] terminal-label normal-case tracking-[0.04em]">
+      <span className="text-sm text-[#c9f6ef] truncate max-w-[200px] terminal-label normal-case tracking-[0.04em]">
         {name}
       </span>
       <button
         onClick={() => setEditing(true)}
-        className="p-0.5 text-[#786d48] opacity-0 group-hover:opacity-100 hover:text-[#fff0b0] transition-all"
+        className="p-0.5 text-[#486d78] opacity-0 group-hover:opacity-100 hover:text-[#b0f0e8] transition-all"
         title="Rename agent"
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1344,7 +1453,7 @@ function MessageBubble({
     return (
       <div className="flex gap-3 justify-end">
         <div className="max-w-[80%]">
-          <div className="terminal-label mb-2 text-right text-[#f2c230]">operator@local &gt;</div>
+          <div className="terminal-label mb-2 text-right text-[#3dd8c5]">operator@local &gt;</div>
           <div className="terminal-bubble-user px-4 py-3 text-sm leading-relaxed text-[#fff5cf]">
           {message.images && message.images.length > 0 && (
             <div className="flex gap-2 flex-wrap mb-2">
@@ -1355,7 +1464,7 @@ function MessageBubble({
                     key={i}
                     src={src}
                     alt={`Attachment ${i + 1}`}
-                    className="max-h-48 max-w-full border border-[#f2c230]/20 object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                    className="max-h-48 max-w-full border border-[#3dd8c5]/20 object-contain cursor-pointer hover:opacity-80 transition-opacity"
                     onClick={() => onImageClick?.(src)}
                   />
                 );
@@ -1367,7 +1476,7 @@ function MessageBubble({
         </div>
         <Tooltip text={tooltip}>
           <div
-            className="w-7 h-7 rounded-full bg-[#3f2d08] border border-amber-200/20 flex items-center justify-center shrink-0 mt-1 cursor-default hover:ring-2 hover:ring-amber-300/40 transition-all duration-150"
+            className="w-7 h-7 rounded-full bg-[#3f2d08] border border-teal-200/20 flex items-center justify-center shrink-0 mt-1 cursor-default hover:ring-2 hover:ring-teal-300/40 transition-all duration-150"
           >
             <UserIcon />
           </div>
@@ -1465,13 +1574,13 @@ function TodoListDisplay({ todos }: { todos: TodoItem[] }) {
   return (
     <div className="terminal-panel my-2 max-w-[80%] overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[#f2c230]/10">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-[#3dd8c5]/10">
         <svg className="w-3.5 h-3.5 text-[#97ff8a]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
             d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
         </svg>
         <span className="terminal-label text-[#97ff8a]">Task Queue</span>
-        <span className="ml-auto text-xs text-[#8b7f59] tabular-nums">
+        <span className="ml-auto text-xs text-[#597f8b] tabular-nums">
           {completed}/{total}
           {failed > 0 && <span className="text-red-400"> ({failed} failed)</span>}
         </span>
@@ -1482,7 +1591,7 @@ function TodoListDisplay({ todos }: { todos: TodoItem[] }) {
         )}
       </div>
       {/* Items */}
-      <div className="divide-y divide-[#f2c230]/10">
+      <div className="divide-y divide-[#3dd8c5]/10">
         {todos.map(todo => (
           <div key={todo.id} className="flex items-start gap-2.5 px-3 py-2">
             {/* Status icon */}
@@ -1511,7 +1620,7 @@ function TodoListDisplay({ todos }: { todos: TodoItem[] }) {
                 todo.status === "completed" ? "text-[#7f7452] line-through" :
                 todo.status === "in_progress" ? "text-[#97ff8a]" :
                 todo.status === "failed" ? "text-red-300" :
-                "text-[#dcca8a]"
+                "text-[#8adcca]"
               }`}>
                 {todo.title}
               </div>

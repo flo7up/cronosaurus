@@ -125,3 +125,47 @@ export async function testNotificationChannel(
   });
   return res.json();
 }
+
+// ── Distribution groups ────────────────────────────────────
+
+export interface DistributionGroup {
+  id: string;
+  name: string;
+  description: string;
+  emails: string[];
+}
+
+export async function fetchDistributionGroups(): Promise<DistributionGroup[]> {
+  const res = await fetch("/api/user/distribution-groups");
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function addDistributionGroup(
+  group: { name: string; description?: string; emails?: string[] }
+): Promise<DistributionGroup> {
+  const res = await fetch("/api/user/distribution-groups", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(group),
+  });
+  if (!res.ok) throw new Error("Failed to add distribution group");
+  return res.json();
+}
+
+export async function updateDistributionGroup(
+  id: string,
+  updates: { name?: string; description?: string; emails?: string[] }
+): Promise<DistributionGroup> {
+  const res = await fetch(`/api/user/distribution-groups/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) throw new Error("Failed to update distribution group");
+  return res.json();
+}
+
+export async function deleteDistributionGroup(id: string): Promise<void> {
+  await fetch(`/api/user/distribution-groups/${id}`, { method: "DELETE" });
+}

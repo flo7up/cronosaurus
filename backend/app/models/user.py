@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 
@@ -89,6 +89,21 @@ class EmailAccountResponse(BaseModel):
     has_password: bool = True
 
 
+class ToolFunctionParam(BaseModel):
+    """A single parameter of a tool function."""
+    name: str
+    type: str = "string"
+    description: str = ""
+    required: bool = False
+
+
+class ToolFunctionInfo(BaseModel):
+    """Describes one function exposed by a tool category."""
+    name: str
+    description: str = ""
+    parameters: list[ToolFunctionParam] = []
+
+
 class ToolCatalogEntry(BaseModel):
     """Describes one available tool for the frontend."""
     id: str
@@ -99,6 +114,7 @@ class ToolCatalogEntry(BaseModel):
     available: bool = True  # False when config/test required but not done
     requires_config: bool = False
     provider_only: str = ""  # empty = all providers, or "azure_foundry" etc.
+    tools: list[ToolFunctionInfo] = []  # individual functions in this tool category
 
 
 class ToolLibraryUpdate(BaseModel):
@@ -138,6 +154,27 @@ class NotificationPreferencesUpdate(BaseModel):
     delivery: str = "all"  # kept for backward compat but ignored in new flow
 
 
+# ── Distribution groups ──────────────────────────────────────────
+
+class DistributionGroupCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str = Field(default="", max_length=300)
+    emails: list[str] = Field(default_factory=list)
+
+
+class DistributionGroupUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    emails: Optional[list[str]] = None
+
+
+class DistributionGroupResponse(BaseModel):
+    id: str
+    name: str
+    description: str = ""
+    emails: list[str] = []
+
+
 class UserPreferencesResponse(BaseModel):
     selected_model: str
     mcp_servers: list[MCPServerResponse]
@@ -147,3 +184,4 @@ class UserPreferencesResponse(BaseModel):
     email_tested: bool = False
     notification_preferences: dict = {"delivery": "all"}
     notification_channels: list[NotificationChannelResponse] = []
+    distribution_groups: list[DistributionGroupResponse] = []

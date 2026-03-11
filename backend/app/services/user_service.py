@@ -872,5 +872,83 @@ class UserService:
         """Return only enabled channels."""
         return [c for c in self.list_notification_channels(user_id) if c.get("enabled", True)]
 
+    # ── Distribution groups ───────────────────────────────────────────
+
+    MAX_DISTRIBUTION_GROUPS = 10
+
+    def list_distribution_groups(self, user_id: str = DEFAULT_USER_ID) -> list[dict]:
+        """Return all distribution groups for the user."""
+        if not self._initialized:
+            return []
+        doc = self._get_user(user_id)
+        return doc.get("distribution_groups", [])
+
+    def add_distribution_group(
+        self,
+        name: str,
+        description: str = "",
+        emails: list[str] | None = None,
+        user_id: str = DEFAULT_USER_ID,
+    ) -> dict:
+        """Add a new distribution group. Returns the group dict."""
+        import uuid
+        doc = self._get_user(user_id)
+        groups = doc.get("distribution_groups", [])
+        if len(groups) >= self.MAX_DISTRIBUTION_GROUPS:
+            raise ValueError(f"Maximum of {self.MAX_DISTRIBUTION_GROUPS} distribution groups reached")
+        group = {
+            "id": str(uuid.uuid4()),
+            "name": name,
+            "description": description,
+            "emails": emails or [],
+        }
+        groups.append(group)
+        doc["distribution_groups"] = groups
+        self._upsert_user(doc)
+        return group
+
+    def update_distribution_group(
+        self,
+        group_id: str,
+        updates: dict,
+        user_id: str = DEFAULT_USER_ID,
+    ) -> dict | None:
+        """Update a distribution group. Returns updated group or None."""
+        doc = self._get_user(user_id)
+        groups = doc.get("distribution_groups", [])
+        for g in groups:
+            if g["id"] == group_id:
+                for k, v in updates.items():
+                    if k != "id" and v is not None:
+                        g[k] = v
+                doc["distribution_groups"] = groups
+                self._upsert_user(doc)
+                return g
+        return None
+
+    def delete_distribution_group(
+        self,
+        group_id: str,
+        user_id: str = DEFAULT_USER_ID,
+    ) -> bool:
+        """Remove a distribution group."""
+        doc = self._get_user(user_id)
+        groups = doc.get("distribution_groups", [])
+        new_groups = [g for g in groups if g["id"] != group_id]
+        if len(new_groups) == len(groups):
+            return False
+        doc["distribution_groups"] = new_groups
+        self._upsert_user(doc)
+        return True
+
+    def get_distribution_group(
+        self,
+        group_id: str,
+        user_id: str = DEFAULT_USER_ID,
+    ) -> dict | None:
+        """Get a single distribution group by ID."""
+        groups = self.list_distribution_groups(user_id)
+        return next((g for g in groups if g["id"] == group_id), None)
+
 
 user_service = UserService()
