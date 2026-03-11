@@ -1121,7 +1121,15 @@ html.light .app-sidebar [class*="bg-\[#0"] {
 html.light .app-content [class*="bg-\[#1"],
 html.light .app-shell [class*="bg-\[#1"],
 html.light .app-modal [class*="bg-\[#1"],
-html.light .app-sidebar [class*="bg-\[#1"] {
+html.light .app-sidebar [class*="bg-\[#1"],
+html.light .app-content [class*="bg-\[#2"],
+html.light .app-shell [class*="bg-\[#2"],
+html.light .app-modal [class*="bg-\[#2"],
+html.light .app-sidebar [class*="bg-\[#2"],
+html.light .app-content [class*="bg-\[#3"],
+html.light .app-shell [class*="bg-\[#3"],
+html.light .app-modal [class*="bg-\[#3"],
+html.light .app-sidebar [class*="bg-\[#3"] {
   background-color: rgba(10, 153, 144, 0.08) !important;
 }
 
@@ -1259,3 +1267,37 @@ html.light .bg-teal-900\\/30 {
 /* ── Light mode: green toggle/active accents ────────────── */
 
 /* Green accents handled by wildcard selectors above */
+
+/* ── Light mode: tool step chip colors ──────────────────── */
+
+html.light .text-yellow-400 { color: #a16207 !important; }
+html.light .text-green-400 { color: #15803d !important; }
+html.light .text-sky-400 { color: #0369a1 !important; }
+html.light .text-indigo-400 { color: #4338ca !important; }
+html.light .text-pink-400 { color: #be185d !important; }
+html.light .text-rose-400 { color: #be123c !important; }
+html.light .text-blue-400 { color: #1d4ed8 !important; }
+html.light .text-cyan-400 { color: #0e7490 !important; }
+html.light .text-purple-400 { color: #7e22ce !important; }
+
+html.light .bg-yellow-900\/30 { background-color: rgba(161, 98, 7, 0.1) !important; }
+html.light .bg-green-900\/30 { background-color: rgba(21, 128, 61, 0.1) !important; }
+html.light .bg-sky-900\/30 { background-color: rgba(3, 105, 161, 0.1) !important; }
+html.light .bg-teal-900\/30 { background-color: rgba(15, 118, 110, 0.1) !important; }
+html.light .bg-indigo-900\/30 { background-color: rgba(67, 56, 202, 0.1) !important; }
+html.light .bg-pink-900\/30 { background-color: rgba(190, 24, 93, 0.1) !important; }
+html.light .bg-rose-900\/30 { background-color: rgba(190, 18, 60, 0.1) !important; }
+html.light .bg-blue-900\/30 { background-color: rgba(29, 78, 216, 0.1) !important; }
+html.light .bg-cyan-900\/30 { background-color: rgba(14, 116, 144, 0.1) !important; }
+html.light .bg-purple-900\/30 { background-color: rgba(126, 34, 206, 0.1) !important; }
+
+html.light .border-yellow-800\/40 { border-color: rgba(161, 98, 7, 0.2) !important; }
+html.light .border-green-800\/40 { border-color: rgba(21, 128, 61, 0.2) !important; }
+html.light .border-sky-800\/40 { border-color: rgba(3, 105, 161, 0.2) !important; }
+html.light .border-teal-800\/40 { border-color: rgba(15, 118, 110, 0.2) !important; }
+html.light .border-indigo-800\/40 { border-color: rgba(67, 56, 202, 0.2) !important; }
+html.light .border-pink-800\/40 { border-color: rgba(190, 24, 93, 0.2) !important; }
+html.light .border-rose-800\/40 { border-color: rgba(190, 18, 60, 0.2) !important; }
+html.light .border-blue-800\/40 { border-color: rgba(29, 78, 216, 0.2) !important; }
+html.light .border-cyan-800\/40 { border-color: rgba(14, 116, 144, 0.2) !important; }
+html.light .border-purple-800\/40 { border-color: rgba(126, 34, 206, 0.2) !important; }

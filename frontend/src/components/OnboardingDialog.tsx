@@ -35,7 +35,7 @@ export default function OnboardingDialog({ onComplete }: OnboardingDialogProps) 
 
   // Tool config
   const [configureEmail, setConfigureEmail] = useState(false);
-  const [configureCosmos, setConfigureCosmos] = useState(true);
+  const [configureCosmos, setConfigureCosmos] = useState(false);
 
   // Test state
   const [foundryTest, setFoundryTest] = useState<{ status: "idle" | "testing" | "success" | "error"; message: string }>({ status: "idle", message: "" });

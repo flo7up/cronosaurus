@@ -26,9 +26,13 @@ class MessageStore:
         self._initialized = False
 
     def initialize(self):
-        """Connect to the messages container (create if needed)."""
+        """Connect to the messages container or fall back to local SQLite."""
         if not settings.cosmos_url or not settings.cosmos_key:
-            logger.warning("COSMOS_URL / COSMOS_KEY not set — message store unavailable.")
+            from app.services.local_store import initialize as init_local, get_container
+            init_local()
+            self._container = get_container("messages")
+            self._initialized = True
+            logger.info("Message store initialized (local SQLite)")
             return
 
         try:

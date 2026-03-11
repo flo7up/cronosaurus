@@ -35,6 +35,7 @@ class SettingsResponse(BaseModel):
     cosmos_db: str = ""
     configure_email: bool = False
     configure_cosmos: bool = False
+    storage_mode: str = "local"  # "local" or "cosmos"
 
 
 class OnboardingCompleteRequest(BaseModel):

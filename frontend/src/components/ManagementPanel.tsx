@@ -2598,12 +2598,21 @@ function SettingsTab() {
         </div>
       </section>
 
-      {/* Cosmos DB */}
+      {/* Storage / Cosmos DB */}
       <section className="space-y-3">
         <h4 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-          <span className="w-2 h-2 bg-[#97ff8a]" />
-          Azure Cosmos DB
+          <span className={`w-2 h-2 ${settings?.storage_mode === "cosmos" ? "bg-[#97ff8a]" : "bg-teal-400"}`} />
+          Data Storage
         </h4>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50">
+          <span className="text-xs text-gray-400">Mode:</span>
+          <span className={`text-xs font-medium ${settings?.storage_mode === "cosmos" ? "text-[#97ff8a]" : "text-teal-400"}`}>
+            {settings?.storage_mode === "cosmos" ? "Azure Cosmos DB" : "Local (SQLite)"}
+          </span>
+          {settings?.storage_mode === "local" && (
+            <span className="text-[10px] text-gray-500 ml-auto">Add Cosmos DB credentials below to switch to cloud storage</span>
+          )}
+        </div>
         <div>
           <label className="block text-xs text-gray-400 mb-1">Cosmos DB URL</label>
           <input
@@ -2677,8 +2686,10 @@ function AppearanceTab() {
     setLightMode(next);
     if (next) {
       document.documentElement.classList.add("light");
+      localStorage.setItem("theme", "light");
     } else {
       document.documentElement.classList.remove("light");
+      localStorage.setItem("theme", "dark");
     }
   };
 

@@ -54,13 +54,17 @@ class UserService:
         self._initialized = False
 
     def initialize(self):
-        """Connect to Cosmos DB and ensure database + container exist."""
+        """Connect to Cosmos DB or fall back to local SQLite."""
         self.reset()
 
         if not settings.cosmos_url or not settings.cosmos_key:
-            logger.warning(
-                "COSMOS_URL / COSMOS_KEY not set - user service unavailable."
-            )
+            # Fall back to local SQLite storage
+            from app.services.local_store import initialize as init_local, get_container
+            init_local()
+            self._container = get_container("users")
+            self._initialized = True
+            self._ensure_user(DEFAULT_USER_ID)
+            logger.info("User service initialized (local SQLite)")
             return
 
         try:

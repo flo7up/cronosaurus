@@ -122,6 +122,8 @@ class SettingsService:
             safe.pop("openai_api_key", None)
             safe["anthropic_api_key_set"] = bool(safe.get("anthropic_api_key"))
             safe.pop("anthropic_api_key", None)
+            # Determine storage mode
+            safe["storage_mode"] = "cosmos" if safe.get("cosmos_url") and safe.get("cosmos_key_set") else "local"
             return safe
 
     def get_raw(self) -> dict[str, Any]:

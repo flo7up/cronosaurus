@@ -42,13 +42,15 @@ class NotificationService:
         self._initialized = False
 
     def initialize(self):
-        """Connect to Cosmos DB and ensure database + container exist."""
+        """Connect to Cosmos DB or fall back to local SQLite."""
         self.reset()
 
         if not settings.cosmos_url or not settings.cosmos_key:
-            logger.warning(
-                "COSMOS_URL / COSMOS_KEY not set — notification service unavailable."
-            )
+            from app.services.local_store import initialize as init_local, get_container
+            init_local()
+            self._container = get_container("notifications")
+            self._initialized = True
+            logger.info("Notification service initialized (local SQLite)")
             return
 
         try:

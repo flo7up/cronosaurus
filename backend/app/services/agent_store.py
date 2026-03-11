@@ -55,11 +55,15 @@ class AgentStore:
         self._initialized = False
 
     def initialize(self):
-        """Connect to Cosmos DB and ensure the agents container exists."""
+        """Connect to Cosmos DB or fall back to local SQLite."""
         self.reset()
 
         if not settings.cosmos_url or not settings.cosmos_key:
-            logger.warning("COSMOS_URL / COSMOS_KEY not set — agent store unavailable.")
+            from app.services.local_store import initialize as init_local, get_container
+            init_local()
+            self._container = get_container("agents")
+            self._initialized = True
+            logger.info("Agent store initialized (local SQLite)")
             return
 
         try:

@@ -253,16 +253,14 @@ export default function NotificationPanel({
                 const cfg = LEVEL_CONFIG[n.level] || LEVEL_CONFIG.info;
                 const isExpanded = expandedId === n.id;
                 const hasContent = !!(n.content && n.content !== n.body);
-                const hasLongBody = !!(n.body && n.body.length > 120);
-                const isExpandable = hasContent || hasLongBody;
+                const hasImages = !!(n.images && n.images.length > 0);
                 return (
                   <div
                     key={n.id}
-                    className={`group px-5 py-3.5 transition-colors hover:bg-[#0f161b] ${
+                    className={`group px-5 py-3.5 transition-colors hover:bg-[#0f161b] cursor-pointer ${
                       !n.read ? "bg-[#0d1318]/60" : ""
-                    } ${isExpandable ? "cursor-pointer" : ""}`}
+                    }`}
                     onClick={() => {
-                      if (!isExpandable) return;
                       const next = isExpanded ? null : n.id;
                       setExpandedId(next);
                       if (next && !n.read) handleMarkRead(n.id);
@@ -289,40 +287,42 @@ export default function NotificationPanel({
                           <span className={`text-sm font-medium ${!n.read ? "text-[#b0f0e8]" : "text-[#8adcca]"}`}>
                             {n.title}
                           </span>
-                          {isExpandable && (
-                            <svg
-                              className={`w-3.5 h-3.5 text-[#486d78] transition-transform shrink-0 ${isExpanded ? "rotate-180" : ""}`}
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          )}
+                          <svg
+                            className={`w-3.5 h-3.5 text-[#486d78] transition-transform shrink-0 ${isExpanded ? "rotate-180" : ""}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
                         </div>
                         <p className={`text-xs text-[#78adb8] mt-0.5 ${isExpanded ? "whitespace-pre-wrap" : "line-clamp-2"}`}>
                           {n.body}
                         </p>
                         {/* Expanded content */}
-                        {isExpanded && hasContent && (
-                          <div className="mt-2 p-3 rounded-lg bg-[#070c0e]/60 border border-[#3dd8c5]/10">
-                            <p className="text-xs text-[#78adb8] whitespace-pre-wrap leading-relaxed">
-                              {n.content}
-                            </p>
-                          </div>
-                        )}
-                        {/* Notification images */}
-                        {n.images && n.images.length > 0 && (
-                          <div className="flex gap-2 flex-wrap mt-2">
-                            {n.images.map((img, i) => (
-                              <img
-                                key={i}
-                                src={`data:${img.media_type};base64,${img.data}`}
-                                alt={`Notification image ${i + 1}`}
-                                className="max-h-40 max-w-full rounded-lg border border-[#3dd8c5]/15 object-contain"
-                              />
-                            ))}
-                          </div>
+                        {isExpanded && (
+                          <>
+                            {hasContent && (
+                              <div className="mt-2 p-3 rounded-lg bg-[#070c0e]/60 border border-[#3dd8c5]/10">
+                                <p className="text-xs text-[#78adb8] whitespace-pre-wrap leading-relaxed">
+                                  {n.content}
+                                </p>
+                              </div>
+                            )}
+                            {/* Notification images */}
+                            {n.images && n.images.length > 0 && (
+                              <div className="flex gap-2 flex-wrap mt-2">
+                                {n.images.map((img, i) => (
+                                  <img
+                                    key={i}
+                                    src={`data:${img.media_type};base64,${img.data}`}
+                                    alt={`Notification image ${i + 1}`}
+                                    className="max-h-40 max-w-full rounded-lg border border-[#3dd8c5]/15 object-contain"
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </>
                         )}
                         <div className="flex items-center gap-2 mt-1.5">
                           {n.agent_name && (

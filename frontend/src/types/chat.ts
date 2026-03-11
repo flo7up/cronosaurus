@@ -179,4 +179,5 @@ export interface AppSettings {
   cosmos_db: string;
   configure_email: boolean;
   configure_cosmos: boolean;
+  storage_mode: string;
 }
