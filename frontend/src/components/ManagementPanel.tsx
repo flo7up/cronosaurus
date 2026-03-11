@@ -280,7 +280,8 @@ function TabIcon({ tab, active }: { tab: Tab; active: boolean }) {
       return (
         <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-            d="M11.42 15.17l-5.1-3.56a1 1 0 00-.86-.08l-2.86.94a1 1 0 01-1.28-.7l-.54-2.26a1 1 0 01.7-1.19l2.89-.78a1 1 0 00.65-.54l1.35-2.88a1 1 0 011.56-.35l2.18 1.9a1 1 0 00.88.2l2.92-.62a1 1 0 011.13.76l.54 2.26a1 1 0 01-.44 1.08l-2.44 1.56a1 1 0 00-.46.76l-.16 2.97a1 1 0 01-1.14.92l-2.26-.42a1 1 0 00-.68.12z" />
+            d="M21.75 6.75a4.5 4.5 0 01-4.884 4.484c-1.076-.091-2.264.071-2.95.904l-7.152 8.684a2.548 2.548 0 11-3.586-3.586l8.684-7.152c.833-.686.995-1.874.904-2.95a4.5 4.5 0 016.336-4.486l-3.276 3.276a3.004 3.004 0 002.25 2.25l3.276-3.276c.256.565.398 1.192.398 1.852z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.867 19.125h.008v.008h-.008v-.008z" />
         </svg>
       );
     case "triggers":
@@ -396,12 +397,12 @@ function ToolRow({ tool, onToggle }: { tool: ToolCatalogEntry; onToggle: () => v
         <div className="text-xs text-[#486d78] mt-0.5">{tool.description}</div>
       </div>
       <div
-        className={`w-9 h-5 transition-colors relative flex-shrink-0 border ${
-          tool.in_library ? "bg-[#122215] border-[#97ff8a]/40" : "bg-[#16120c] border-[#1d4c5f]"
+        className={`w-9 h-5 transition-colors relative flex-shrink-0 rounded-full ${
+          tool.in_library ? "bg-teal-600" : "bg-gray-600"
         }`}
       >
         <span
-          className={`absolute top-0.5 w-4 h-4 bg-[#c9f6ef] shadow transition-transform ${
+          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
             tool.in_library ? "left-[18px]" : "left-0.5"
           }`}
         />
@@ -2153,6 +2154,14 @@ function SettingsTab() {
   const [cKey, setCKey] = useState("");
   const [cDb, setCDb] = useState("");
 
+  // Calendar config
+  const [calProvider, setCalProvider] = useState("google");
+  const [calUrl, setCalUrl] = useState("");
+  const [calUsername, setCalUsername] = useState("");
+  const [calPassword, setCalPassword] = useState("");
+  const [calConfigured, setCalConfigured] = useState(false);
+  const [calSaving, setCalSaving] = useState(false);
+
   useEffect(() => {
     fetchSettings()
       .then((s) => {
@@ -2169,6 +2178,19 @@ function SettingsTab() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    // Load calendar config
+    fetch("/api/user/calendar-config")
+      .then(r => r.json())
+      .then(c => {
+        if (c.configured) {
+          setCalProvider(c.provider || "google");
+          setCalUrl(c.caldav_url || "");
+          setCalUsername(c.username || "");
+          setCalConfigured(true);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const toggleModel = (model: string) => {
@@ -2595,6 +2617,112 @@ function SettingsTab() {
             }}
           />
           <span className="text-[10px] text-gray-500 self-center whitespace-nowrap">Press Enter</span>
+        </div>
+      </section>
+
+      {/* Calendar */}
+      <section className="space-y-3">
+        <h4 className="text-sm font-medium text-gray-300 flex items-center gap-2">
+          <span className={`w-2 h-2 ${calConfigured ? "bg-[#97ff8a]" : "bg-gray-600"}`} />
+          Calendar (CalDAV)
+        </h4>
+        <p className="text-xs text-gray-500">
+          Connect a calendar to let agents read your schedule and create events. Supports Google Calendar, Apple iCloud, Nextcloud, and any CalDAV server.
+        </p>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Provider</label>
+          <select
+            value={calProvider}
+            onChange={(e) => {
+              const p = e.target.value;
+              setCalProvider(p);
+              if (p === "google") setCalUrl("https://www.googleapis.com/caldav/v2/");
+              else if (p === "icloud") setCalUrl("https://caldav.icloud.com/");
+              else if (p === "custom") setCalUrl("");
+            }}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+          >
+            <option value="google">Google Calendar</option>
+            <option value="icloud">Apple iCloud</option>
+            <option value="nextcloud">Nextcloud</option>
+            <option value="custom">Custom CalDAV</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">CalDAV URL</label>
+          <input
+            type="text"
+            value={calUrl}
+            onChange={(e) => setCalUrl(e.target.value)}
+            placeholder={calProvider === "google" ? "https://www.googleapis.com/caldav/v2/" : calProvider === "icloud" ? "https://caldav.icloud.com/" : "https://your-server.com/remote.php/dav/"}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Username / Email</label>
+          <input
+            type="text"
+            value={calUsername}
+            onChange={(e) => setCalUsername(e.target.value)}
+            placeholder="your@email.com"
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">
+            Password / App Password
+            {calConfigured && <span className="text-green-400 ml-2">(configured)</span>}
+          </label>
+          <input
+            type="password"
+            value={calPassword}
+            onChange={(e) => setCalPassword(e.target.value)}
+            placeholder={calConfigured ? "Leave blank to keep current" : "App-specific password"}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+          />
+          <p className="text-[10px] text-gray-600 mt-1">
+            {calProvider === "google" && "Generate at myaccount.google.com/apppasswords"}
+            {calProvider === "icloud" && "Generate at appleid.apple.com → Sign-In and Security → App-Specific Passwords"}
+            {calProvider === "nextcloud" && "Use your Nextcloud credentials"}
+            {calProvider === "custom" && "Your CalDAV server credentials"}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              if (!calUrl) return;
+              setCalSaving(true);
+              try {
+                await fetch("/api/user/calendar-config", {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ provider: calProvider, caldav_url: calUrl, username: calUsername, password: calPassword }),
+                });
+                setCalConfigured(true);
+                setCalPassword("");
+              } catch { /* silent */ }
+              setCalSaving(false);
+            }}
+            disabled={!calUrl || calSaving}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:border-gray-600 disabled:opacity-40 transition-colors"
+          >
+            {calSaving ? <span className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" /> : null}
+            {calConfigured ? "Update" : "Save"}
+          </button>
+          {calConfigured && (
+            <button
+              onClick={async () => {
+                await fetch("/api/user/calendar-config", { method: "DELETE" });
+                setCalConfigured(false);
+                setCalUrl("");
+                setCalUsername("");
+                setCalPassword("");
+              }}
+              className="px-3 py-1.5 text-xs rounded-lg bg-gray-800 border border-gray-700 text-red-400 hover:border-red-600 transition-colors"
+            >
+              Remove
+            </button>
+          )}
         </div>
       </section>
 

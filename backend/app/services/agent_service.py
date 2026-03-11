@@ -82,6 +82,31 @@ from app.tools.weather_tools import (
     WEATHER_TOOL_NAMES,
     execute_weather_tool,
 )
+from app.tools.calendar_tools import (
+    CALENDAR_TOOL_DEFINITIONS,
+    CALENDAR_TOOL_NAMES,
+    execute_calendar_tool,
+)
+from app.tools.filesystem_tools import (
+    FILESYSTEM_TOOL_DEFINITIONS,
+    FILESYSTEM_TOOL_NAMES,
+    execute_filesystem_tool,
+)
+from app.tools.calculator_tools import (
+    CALCULATOR_TOOL_DEFINITIONS,
+    CALCULATOR_TOOL_NAMES,
+    execute_calculator_tool,
+)
+from app.tools.rss_tools import (
+    RSS_TOOL_DEFINITIONS,
+    RSS_TOOL_NAMES,
+    execute_rss_tool,
+)
+from app.tools.screenshot_tools import (
+    SCREENSHOT_TOOL_DEFINITIONS,
+    SCREENSHOT_TOOL_NAMES,
+    execute_screenshot_tool,
+)
 from app.tools.tool_management_tools import (
     TOOL_MANAGEMENT_TOOL_DEFINITIONS,
     TOOL_MANAGEMENT_TOOL_NAMES,
@@ -165,6 +190,11 @@ TOOL_CATALOG: dict[str, list[dict]] = {
     "notifications": NOTIFICATION_TOOL_DEFINITIONS,
     "azure_costs": AZURE_COST_TOOL_DEFINITIONS,
     "weather": WEATHER_TOOL_DEFINITIONS,
+    "calendar": CALENDAR_TOOL_DEFINITIONS,
+    "filesystem": FILESYSTEM_TOOL_DEFINITIONS,
+    "calculator": CALCULATOR_TOOL_DEFINITIONS,
+    "rss": RSS_TOOL_DEFINITIONS,
+    "screenshot": SCREENSHOT_TOOL_DEFINITIONS,
     "tool_management": TOOL_MANAGEMENT_TOOL_DEFINITIONS,
 }
 
@@ -233,6 +263,36 @@ TOOL_CATALOG_META: dict[str, dict] = {
     "tool_management": {
         "label": "Tool Management",
         "description": "Let the agent discover all available tools on the platform and activate or deactivate them on itself. Useful when the agent needs a capability it doesn't have yet.",
+        "category": "built-in",
+        "requires_config": False,
+    },
+    "calendar": {
+        "label": "Calendar",
+        "description": "Read and manage calendar events via CalDAV. Supports Google Calendar, Apple iCloud, Nextcloud, and any CalDAV server. List calendars, view events, create meetings, and search.",
+        "category": "configurable",
+        "requires_config": True,
+    },
+    "filesystem": {
+        "label": "File System",
+        "description": "Read, write, and manage files in a local workspace. Export data as CSV, save reports, read config files, and list directory contents.",
+        "category": "built-in",
+        "requires_config": False,
+    },
+    "calculator": {
+        "label": "Calculator",
+        "description": "Precise math calculations, unit conversions (length, weight, temperature, data), and financial formulas (compound interest, loan payments, ROI).",
+        "category": "built-in",
+        "requires_config": False,
+    },
+    "rss": {
+        "label": "RSS Feeds",
+        "description": "Read and monitor RSS/Atom feeds. Fetch latest articles from any feed URL and check for new content since a specific date. Great for news monitoring with triggers.",
+        "category": "built-in",
+        "requires_config": False,
+    },
+    "screenshot": {
+        "label": "Website Screenshot",
+        "description": "Capture screenshots of any website. Renders the page with a headless browser and returns an image for visual analysis or notification attachments.",
         "category": "built-in",
         "requires_config": False,
     },
@@ -490,6 +550,82 @@ Rules:
 - Temperatures are in Celsius. Convert to Fahrenheit if the user prefers.
 - Present weather information in a clear, concise format.
 - Mention notable conditions (rain, snow, extreme heat/cold).
+"""
+
+CALENDAR_INSTRUCTIONS_SUFFIX = """
+
+You have access to calendar tools via CalDAV. Use them when the user asks
+about their schedule, meetings, appointments, or wants to create events.
+
+Tools: list_calendars, get_calendar_events, create_calendar_event, search_calendar_events
+
+Rules:
+- Use list_calendars to discover available calendars first if needed.
+- Use get_calendar_events to show upcoming events (defaults to next 7 days).
+- Use create_calendar_event to schedule meetings — always confirm the time with the user.
+- Use search_calendar_events to find specific events by keyword.
+- Present events in a clear chronological format with time, title, and location.
+- When creating events, include all relevant details (title, time, location, attendees).
+- If the calendar is not configured, tell the user to set it up in Settings > Connections.
+"""
+
+FILESYSTEM_INSTRUCTIONS_SUFFIX = """
+
+You have access to file system tools. Use them to read, write, and manage
+files in the local workspace directory.
+
+Tools: read_file, write_file, write_csv, list_files, delete_file
+
+Rules:
+- All paths are relative to the workspace directory (sandboxed).
+- Use write_csv to export structured data (tables, reports) as CSV files.
+- Use write_file for text reports, logs, or configuration files.
+- Maximum file read size is 5MB.
+- When saving reports, use descriptive filenames with dates.
+"""
+
+CALCULATOR_INSTRUCTIONS_SUFFIX = """
+
+You have access to calculator tools for precise math and conversions.
+
+Tools: calculate, convert_units, financial_calculate
+
+Rules:
+- Use calculate for any math expression (arithmetic, sqrt, trig, etc.).
+- Use convert_units for unit conversions (length, weight, temperature, data, etc.).
+- Use financial_calculate for compound interest, loan payments, ROI, and percentage change.
+- Always use the calculator instead of doing mental math for accuracy.
+- For financial calculations, rate is a percentage (e.g. 5.5 for 5.5%).
+"""
+
+RSS_INSTRUCTIONS_SUFFIX = """
+
+You have access to RSS feed tools. Use them to read and monitor any
+RSS or Atom feed.
+
+Tools: read_rss_feed, check_rss_new_items
+
+Rules:
+- Use read_rss_feed to fetch the latest articles from any feed URL.
+- Use check_rss_new_items with a since date to check for new content.
+- When used in triggers, check_rss_new_items is ideal for monitoring
+  feeds periodically and notifying about new articles.
+- Present feed items clearly with title, link, and summary.
+"""
+
+SCREENSHOT_INSTRUCTIONS_SUFFIX = """
+
+You have access to a website screenshot tool. Use it to capture visual
+snapshots of any web page.
+
+Tools: capture_screenshot
+
+Rules:
+- The captured image is returned as base64 and can be analyzed visually.
+- Default viewport is 1280x720. Use full_page=true for full-page captures.
+- Use wait_seconds to let dynamic pages (SPAs, dashboards) finish loading.
+- The image is automatically included in notifications if you send one.
+- Great for monitoring website changes, capturing dashboards, or documenting pages.
 """
 
 TOOL_MANAGEMENT_INSTRUCTIONS_SUFFIX = """
@@ -755,6 +891,16 @@ class AgentService:
             instructions += AZURE_COST_INSTRUCTIONS_SUFFIX
         if "weather" in tool_ids:
             instructions += WEATHER_INSTRUCTIONS_SUFFIX
+        if "calendar" in tool_ids:
+            instructions += CALENDAR_INSTRUCTIONS_SUFFIX
+        if "filesystem" in tool_ids:
+            instructions += FILESYSTEM_INSTRUCTIONS_SUFFIX
+        if "calculator" in tool_ids:
+            instructions += CALCULATOR_INSTRUCTIONS_SUFFIX
+        if "rss" in tool_ids:
+            instructions += RSS_INSTRUCTIONS_SUFFIX
+        if "screenshot" in tool_ids:
+            instructions += SCREENSHOT_INSTRUCTIONS_SUFFIX
         if "tool_management" in tool_ids:
             instructions += TOOL_MANAGEMENT_INSTRUCTIONS_SUFFIX
 
@@ -1245,6 +1391,16 @@ class AgentService:
             return execute_azure_cost_tool(tool_name=fn_name, arguments=fn_args)
         elif fn_name in WEATHER_TOOL_NAMES:
             return execute_weather_tool(tool_name=fn_name, arguments=fn_args)
+        elif fn_name in CALENDAR_TOOL_NAMES:
+            return execute_calendar_tool(tool_name=fn_name, arguments=fn_args)
+        elif fn_name in FILESYSTEM_TOOL_NAMES:
+            return execute_filesystem_tool(tool_name=fn_name, arguments=fn_args)
+        elif fn_name in CALCULATOR_TOOL_NAMES:
+            return execute_calculator_tool(tool_name=fn_name, arguments=fn_args)
+        elif fn_name in RSS_TOOL_NAMES:
+            return execute_rss_tool(tool_name=fn_name, arguments=fn_args)
+        elif fn_name in SCREENSHOT_TOOL_NAMES:
+            return execute_screenshot_tool(tool_name=fn_name, arguments=fn_args)
         elif fn_name in TOOL_MANAGEMENT_TOOL_NAMES:
             return execute_tool_management_tool(
                 tool_name=fn_name, arguments=fn_args, agent_id=agent_id,

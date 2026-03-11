@@ -281,7 +281,10 @@ def _send_smtp(
                 import base64
                 from email.mime.image import MIMEImage
                 for i, img in enumerate(images):
-                    img_data = base64.b64decode(img["data"])
+                    raw_b64 = img["data"]
+                    # Fix padding if needed
+                    raw_b64 += "=" * (-len(raw_b64) % 4)
+                    img_data = base64.b64decode(raw_b64)
                     media_type = img.get("media_type", "image/jpeg")
                     subtype = media_type.split("/")[-1] if "/" in media_type else "jpeg"
                     mime_img = MIMEImage(img_data, _subtype=subtype)

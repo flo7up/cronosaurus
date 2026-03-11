@@ -954,5 +954,50 @@ class UserService:
         groups = self.list_distribution_groups(user_id)
         return next((g for g in groups if g["id"] == group_id), None)
 
+    # ── Calendar configuration ────────────────────────────────────────
+
+    def get_calendar_config(self, user_id: str = DEFAULT_USER_ID) -> dict | None:
+        """Get the user's calendar configuration."""
+        if not self._initialized:
+            return None
+        doc = self._get_user(user_id)
+        config = doc.get("calendar_config")
+        if config and config.get("password_encrypted"):
+            config = dict(config)
+            config["password"] = decrypt(config.pop("password_encrypted"))
+        return config
+
+    def set_calendar_config(
+        self,
+        provider: str,
+        caldav_url: str,
+        username: str,
+        password: str = "",
+        user_id: str = DEFAULT_USER_ID,
+    ) -> dict:
+        """Set the user's calendar configuration."""
+        doc = self._get_user(user_id)
+        config: dict = {
+            "provider": provider,
+            "caldav_url": caldav_url,
+            "username": username,
+        }
+        if password:
+            config["password_encrypted"] = encrypt(password)
+        elif doc.get("calendar_config", {}).get("password_encrypted"):
+            config["password_encrypted"] = doc["calendar_config"]["password_encrypted"]
+        doc["calendar_config"] = config
+        self._upsert_user(doc)
+        return {"provider": provider, "caldav_url": caldav_url, "username": username, "has_password": bool(config.get("password_encrypted"))}
+
+    def delete_calendar_config(self, user_id: str = DEFAULT_USER_ID) -> bool:
+        """Remove the user's calendar configuration."""
+        doc = self._get_user(user_id)
+        if "calendar_config" not in doc:
+            return False
+        del doc["calendar_config"]
+        self._upsert_user(doc)
+        return True
+
 
 user_service = UserService()

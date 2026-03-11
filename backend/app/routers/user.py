@@ -189,6 +189,50 @@ def delete_distribution_group(group_id: str):
         raise HTTPException(404, "Distribution group not found")
 
 
+# ── Calendar configuration ────────────────────────────────────────
+
+@router.get("/calendar-config")
+def get_calendar_config():
+    """Get the user's calendar configuration (password masked)."""
+    _require_ready()
+    config = user_service.get_calendar_config()
+    if not config:
+        return {"configured": False}
+    return {
+        "configured": True,
+        "provider": config.get("provider", "custom"),
+        "caldav_url": config.get("caldav_url", ""),
+        "username": config.get("username", ""),
+        "has_password": bool(config.get("password") or config.get("password_encrypted")),
+    }
+
+
+@router.put("/calendar-config")
+def set_calendar_config(body: dict):
+    """Set/update the user's calendar configuration."""
+    _require_ready()
+    provider = body.get("provider", "custom")
+    caldav_url = body.get("caldav_url", "")
+    username = body.get("username", "")
+    password = body.get("password", "")
+    if not caldav_url:
+        raise HTTPException(400, "caldav_url is required")
+    result = user_service.set_calendar_config(
+        provider=provider,
+        caldav_url=caldav_url,
+        username=username,
+        password=password,
+    )
+    return {"configured": True, **result}
+
+
+@router.delete("/calendar-config", status_code=204)
+def delete_calendar_config():
+    """Remove the user's calendar configuration."""
+    _require_ready()
+    user_service.delete_calendar_config()
+
+
 @router.get("/tools", response_model=list[ToolPreference])
 def get_tool_preferences():
     """Get tool enabled/disabled preferences."""
@@ -243,6 +287,9 @@ def get_tool_catalog():
             ))
         return funcs
 
+    calendar_config = user_service.get_calendar_config()
+    calendar_configured = bool(calendar_config and calendar_config.get("caldav_url"))
+
     entries = []
     for tool_id, meta in TOOL_CATALOG_META.items():
         # Determine if the tool is ready to use
@@ -250,6 +297,8 @@ def get_tool_catalog():
         if tool_id == "email_send" and not email_configured:
             available = False
         elif tool_id == "email_read" and not imap_configured:
+            available = False
+        elif tool_id == "calendar" and not calendar_configured:
             available = False
 
         entries.append(ToolCatalogEntry(
