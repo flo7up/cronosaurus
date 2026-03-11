@@ -688,78 +688,12 @@ html.light .brand-button-primary {
   border-color: rgba(10, 153, 144, 0.3) !important;
 }
 
-/* ── Light mode text overrides ──────────────────────────── */
+/* Light mode text/bg/border overrides are handled by wildcard
+   attribute selectors in the "chat bubbles & all inline dark text"
+   section below. */
 
-html.light .text-\\[\\#b0f0e8\\],
-html.light .text-\\[\\#c9f6ef\\],
-html.light .text-\\[\\#b0f0e6\\],
-html.light .text-\\[\\#c0f6ef\\] {
-  color: #162c28 !important;
-}
-
-html.light .text-\\[\\#8adcca\\],
-html.light .text-\\[\\#84b8c3\\] {
-  color: #304a42 !important;
-}
-
-html.light .text-\\[\\#78adb8\\],
-html.light .text-\\[\\#649b8f\\] {
-  color: #40606b !important;
-}
-
-html.light .text-\\[\\#597f8b\\],
-html.light .text-\\[\\#486d78\\] {
-  color: #587d8a !important;
-}
-
-html.light .text-\\[\\#1d4c5f\\],
-html.light .text-\\[\\#305a5a\\],
-html.light .text-\\[\\#426d6d\\] {
-  color: #709090 !important;
-}
-
-html.light .text-\\[\\#97ff8a\\] {
-  color: var(--terminal-green) !important;
-}
-
-/* ── Light mode backgrounds ─────────────────────────────── */
-
-html.light .bg-\\[\\#0e1922\\],
-html.light .bg-\\[\\#0f161b\\],
-html.light .bg-\\[\\#0d1318\\],
-html.light .bg-\\[\\#122215\\],
-html.light .bg-\\[\\#0f1812\\],
-html.light .bg-\\[\\#0f1a12\\] {
-  background-color: rgba(10, 153, 140, 0.08) !important;
-}
-
-html.light .bg-\\[\\#070c0e\\]\\/80,
-html.light .bg-\\[\\#090f13\\] {
-  background-color: rgba(235, 245, 248, 0.95) !important;
-}
-
-html.light .hover\\:bg-\\[\\#0f161b\\]:hover,
-html.light .hover\\:bg-\\[\\#0d1318\\]:hover,
-html.light .hover\\:bg-\\[\\#0e1922\\]:hover,
-html.light .hover\\:bg-\\[\\#1a2515\\]:hover {
-  background-color: rgba(100, 160, 180, 0.1) !important;
-}
-
-/* ── Light mode borders ─────────────────────────────────── */
-
-html.light .border-\\[\\#3dd8c5\\]\\/10,
-html.light .border-\\[\\#3dd8c5\\]\\/12,
-html.light .border-\\[\\#3dd8c5\\]\\/14,
-html.light .border-\\[\\#3dd8c5\\]\\/18,
-html.light .border-\\[\\#3dd8c5\\]\\/22 {
-  border-color: rgba(100, 160, 180, 0.2) !important;
-}
-
-html.light .border-\\[\\#3dd8c5\\]\\/30,
-html.light .border-\\[\\#97ff8a\\]\\/30,
-html.light .border-\\[\\#97ff8a\\]\\/40 {
-  border-color: rgba(45, 122, 34, 0.25) !important;
-}
+/* Hover and border overrides for arbitrary values are handled by
+   wildcard attribute selectors below. */
 
 /* ── Light mode app-shell gray overrides ────────────────── */
 
@@ -896,3 +830,432 @@ html.light .bg-black\/50,
 html.light .bg-black\/60 {
   background-color: rgba(0, 0, 0, 0.15) !important;
 }
+
+/* ── Light mode: input & form elements ──────────────────── */
+
+html.light .app-modal input,
+html.light .app-modal textarea,
+html.light .app-modal select {
+  background: rgba(245, 250, 252, 0.95) !important;
+  border-color: rgba(80, 160, 160, 0.22) !important;
+  color: #16282c !important;
+}
+
+html.light .app-modal input:focus,
+html.light .app-modal textarea:focus,
+html.light .app-modal select:focus {
+  border-color: rgba(10, 153, 144, 0.5) !important;
+  box-shadow: 0 0 0 2px rgba(10, 153, 144, 0.1) !important;
+}
+
+html.light .app-modal input::placeholder,
+html.light .app-modal textarea::placeholder {
+  color: #8aA0A8 !important;
+}
+
+/* ── Light mode: toggle switches ────────────────────────── */
+
+html.light .app-shell .bg-green-600\/40,
+html.light .app-modal .bg-green-600\/40 {
+  background-color: rgba(45, 122, 34, 0.2) !important;
+}
+
+html.light .bg-\\[\\#97ff8a\\]\\/30 {
+  background-color: rgba(45, 122, 34, 0.15) !important;
+}
+
+html.light .bg-\\[\\#333\\] {
+  background-color: #d0dde0 !important;
+}
+
+/* ── Light mode: notification badge ─────────────────────── */
+
+html.light .app-shell .bg-red-500 {
+  background-color: #dc2626 !important;
+  color: #fff !important;
+}
+
+html.light .bg-red-900\/40 {
+  background-color: rgba(220, 38, 38, 0.1) !important;
+}
+
+html.light .text-red-400 {
+  color: #dc2626 !important;
+}
+
+/* ── Light mode: status colors ──────────────────────────── */
+
+html.light .text-teal-300 {
+  color: #0a9990 !important;
+}
+
+html.light .bg-teal-200\/15 {
+  background-color: rgba(10, 153, 144, 0.08) !important;
+}
+
+/* ── Light mode: sidebar agent list ─────────────────────── */
+
+html.light .app-sidebar .terminal-control {
+  background: rgba(245, 250, 252, 0.9) !important;
+  border-color: rgba(80, 160, 160, 0.18) !important;
+}
+
+html.light .app-sidebar .terminal-control:hover {
+  background: rgba(230, 242, 245, 0.95) !important;
+}
+
+html.light .app-sidebar .terminal-titlebar {
+  background: rgba(245, 250, 252, 0.8) !important;
+}
+
+/* ── Light mode: tab active state in settings modal ─────── */
+
+html.light .app-modal .terminal-control {
+  background: rgba(245, 250, 252, 0.9) !important;
+}
+
+/* ── Light mode: card backgrounds (gray-800, gray-800/50) ── */
+
+html.light .app-shell .bg-gray-800\/50,
+html.light .app-modal .bg-gray-800\/50 {
+  background-color: rgba(238, 245, 248, 0.7) !important;
+}
+
+/* ── Light mode: green border (active states) ───────────── */
+
+html.light .app-shell .border-green-600,
+html.light .app-modal .border-green-600 {
+  border-color: rgba(10, 153, 144, 0.5) !important;
+}
+
+html.light .app-shell .bg-green-600,
+html.light .app-modal .bg-green-600 {
+  background-color: rgba(10, 153, 144, 0.12) !important;
+  border-color: rgba(10, 153, 144, 0.35) !important;
+}
+
+/* ── Light mode: chat input area ────────────────────────── */
+
+html.light .terminal-panel {
+  background: rgba(255, 255, 255, 0.96) !important;
+}
+
+html.light .app-content .terminal-panel input,
+html.light .app-content .terminal-panel textarea {
+  background: transparent !important;
+  color: #16282c !important;
+}
+
+html.light .app-content .terminal-panel input::placeholder,
+html.light .app-content .terminal-panel textarea::placeholder {
+  color: #8aa0a8 !important;
+}
+
+/* ── Light mode: focus outline for brand button ─────────── */
+
+html.light .brand-button-primary {
+  box-shadow: 0 2px 8px rgba(10, 153, 144, 0.2) !important;
+}
+
+html.light .brand-button-primary:disabled {
+  opacity: 0.35 !important;
+}
+
+/* ── Light mode: slide-in panels (tools, notifications) ─── */
+
+html.light .app-sidebar,
+html.light .animate-slide-in-left,
+html.light .animate-slide-in-right {
+  background: rgba(255, 255, 255, 0.98) !important;
+}
+
+/* ── Light mode: scanline overlay ───────────────────────── */
+
+html.light body::before {
+  opacity: 0 !important;
+}
+
+/* ── Light mode: catch-all for any remaining dark backgrounds ── */
+
+html.light .app-shell [class*="bg-gray-8"],
+html.light .app-modal [class*="bg-gray-8"],
+html.light .app-shell [class*="bg-gray-9"],
+html.light .app-modal [class*="bg-gray-9"] {
+  background-color: rgba(238, 245, 248, 0.95) !important;
+}
+
+html.light .app-shell [class*="border-gray-"],
+html.light .app-modal [class*="border-gray-"] {
+  border-color: rgba(100, 160, 180, 0.2) !important;
+}
+
+/* ── Light mode: remaining text color catch-alls ────────── */
+
+html.light .app-shell [class*="text-gray-2"],
+html.light .app-modal [class*="text-gray-2"] {
+  color: #22383a !important;
+}
+
+html.light .app-shell [class*="text-gray-3"],
+html.light .app-modal [class*="text-gray-3"] {
+  color: #304a42 !important;
+}
+
+html.light .app-shell [class*="text-gray-4"],
+html.light .app-modal [class*="text-gray-4"] {
+  color: #40606b !important;
+}
+
+html.light .app-shell [class*="text-gray-5"],
+html.light .app-modal [class*="text-gray-5"] {
+  color: #587d8a !important;
+}
+
+/* ── Light mode: green accents in modal ─────────────────── */
+
+html.light .app-modal .text-green-400 {
+  color: #15803d !important;
+}
+
+html.light .app-modal .border-green-600 {
+  border-color: #15803d !important;
+}
+
+/* ── Light mode: chat bubbles & all inline dark text ─────── */
+
+/* Force all text inside chat area and modals to be dark in light mode */
+html.light .terminal-bubble,
+html.light .terminal-bubble * {
+  color: #1a3a30 !important;
+}
+
+html.light .terminal-bubble-user,
+html.light .terminal-bubble-user * {
+  color: #1a2a3a !important;
+}
+
+/* Terminal labels in chat */
+html.light .terminal-label {
+  color: #0a7a6e !important;
+}
+
+/* Force dark text on all elements in app-content and app-modal with light-colored inline styles */
+html.light .app-content [class*="text-\[#b0f0"],
+html.light .app-content [class*="text-\[#c9f6"],
+html.light .app-content [class*="text-\[#c0f6"],
+html.light .app-content [class*="text-\[#8adc"],
+html.light .app-content [class*="text-\[#e0f5"],
+html.light .app-content [class*="text-\[#fff5"],
+html.light .app-content [class*="text-\[#5eeb"],
+html.light .app-modal [class*="text-\[#b0f0"],
+html.light .app-modal [class*="text-\[#c9f6"],
+html.light .app-modal [class*="text-\[#c0f6"],
+html.light .app-modal [class*="text-\[#8adc"],
+html.light .app-modal [class*="text-\[#e0f5"],
+html.light .app-modal [class*="text-\[#fff5"],
+html.light .app-shell [class*="text-\[#b0f0"],
+html.light .app-shell [class*="text-\[#c9f6"],
+html.light .app-shell [class*="text-\[#c0f6"],
+html.light .app-shell [class*="text-\[#8adc"],
+html.light .app-shell [class*="text-\[#e0f5"],
+html.light .app-shell [class*="text-\[#fff5"],
+html.light .app-shell [class*="text-\[#5eeb"] {
+  color: #16282c !important;
+}
+
+/* Medium-brightness text → mid-dark */
+html.light .app-content [class*="text-\[#78ad"],
+html.light .app-content [class*="text-\[#649b"],
+html.light .app-content [class*="text-\[#84b8"],
+html.light .app-shell [class*="text-\[#78ad"],
+html.light .app-shell [class*="text-\[#649b"],
+html.light .app-shell [class*="text-\[#84b8"],
+html.light .app-modal [class*="text-\[#78ad"],
+html.light .app-modal [class*="text-\[#649b"],
+html.light .app-modal [class*="text-\[#84b8"] {
+  color: #40606b !important;
+}
+
+/* Dim text → medium */
+html.light .app-content [class*="text-\[#597f"],
+html.light .app-content [class*="text-\[#486d"],
+html.light .app-content [class*="text-\[#426d"],
+html.light .app-content [class*="text-\[#305a"],
+html.light .app-shell [class*="text-\[#597f"],
+html.light .app-shell [class*="text-\[#486d"],
+html.light .app-shell [class*="text-\[#426d"],
+html.light .app-shell [class*="text-\[#305a"],
+html.light .app-modal [class*="text-\[#597f"],
+html.light .app-modal [class*="text-\[#486d"],
+html.light .app-modal [class*="text-\[#426d"],
+html.light .app-modal [class*="text-\[#305a"] {
+  color: #587d8a !important;
+}
+
+/* Brand accent text → darker teal */
+html.light .app-content [class*="text-\[#3dd8"],
+html.light .app-shell [class*="text-\[#3dd8"],
+html.light .app-modal [class*="text-\[#3dd8"] {
+  color: #0a8a82 !important;
+}
+
+/* Green text → dark green */
+html.light .app-content [class*="text-\[#97ff"],
+html.light .app-shell [class*="text-\[#97ff"],
+html.light .app-modal [class*="text-\[#97ff"],
+html.light .app-content [class*="text-\[#c3ff"],
+html.light .app-shell [class*="text-\[#c3ff"],
+html.light .app-modal [class*="text-\[#c3ff"] {
+  color: #1e6b16 !important;
+}
+
+/* ── Light mode: dark backgrounds → light ───────────────── */
+
+html.light .app-content [class*="bg-\[#0"],
+html.light .app-shell [class*="bg-\[#0"],
+html.light .app-modal [class*="bg-\[#0"],
+html.light .app-sidebar [class*="bg-\[#0"] {
+  background-color: rgba(10, 153, 144, 0.06) !important;
+}
+
+html.light .app-content [class*="bg-\[#1"],
+html.light .app-shell [class*="bg-\[#1"],
+html.light .app-modal [class*="bg-\[#1"],
+html.light .app-sidebar [class*="bg-\[#1"] {
+  background-color: rgba(10, 153, 144, 0.08) !important;
+}
+
+/* User avatar circle */
+html.light [class*="bg-\[#3f2d"] {
+  background-color: rgba(10, 153, 144, 0.15) !important;
+}
+
+/* ── Light mode: dark borders → light ───────────────────── */
+
+html.light .app-content [class*="border-\[#3dd8"],
+html.light .app-shell [class*="border-\[#3dd8"],
+html.light .app-modal [class*="border-\[#3dd8"],
+html.light .app-sidebar [class*="border-\[#3dd8"] {
+  border-color: rgba(10, 153, 144, 0.2) !important;
+}
+
+html.light .app-content [class*="border-\[#97ff"],
+html.light .app-shell [class*="border-\[#97ff"],
+html.light .app-modal [class*="border-\[#97ff"] {
+  border-color: rgba(45, 122, 34, 0.2) !important;
+}
+
+html.light [class*="border-teal-200"],
+html.light [class*="border-teal-400"] {
+  border-color: rgba(10, 153, 144, 0.2) !important;
+}
+
+/* ── Light mode: hover states with dark backgrounds ─────── */
+
+html.light .app-content [class*="hover\\:bg-\[#0"]:hover,
+html.light .app-shell [class*="hover\\:bg-\[#0"]:hover,
+html.light .app-modal [class*="hover\\:bg-\[#0"]:hover,
+html.light .app-sidebar [class*="hover\\:bg-\[#0"]:hover,
+html.light .app-content [class*="hover\\:bg-\[#1"]:hover,
+html.light .app-shell [class*="hover\\:bg-\[#1"]:hover,
+html.light .app-modal [class*="hover\\:bg-\[#1"]:hover,
+html.light .app-sidebar [class*="hover\\:bg-\[#1"]:hover {
+  background-color: rgba(10, 153, 144, 0.1) !important;
+}
+
+/* ── Light mode: placeholder text ───────────────────────── */
+
+html.light .app-content [class*="placeholder-\[#"] *::placeholder,
+html.light .app-content [class*="placeholder-\[#"]::placeholder,
+html.light .app-shell [class*="placeholder-\[#"] *::placeholder,
+html.light .app-shell [class*="placeholder-\[#"]::placeholder {
+  color: #8aa0a8 !important;
+}
+
+/* ── Light mode: tool step chips ────────────────────────── */
+
+html.light .terminal-chip {
+  background: rgba(238, 245, 248, 0.9) !important;
+  border-color: rgba(80, 160, 160, 0.2) !important;
+  color: #40606b !important;
+}
+
+/* ── Light mode: trigger status bar ─────────────────────── */
+
+html.light .app-content .terminal-panel {
+  background: rgba(255, 255, 255, 0.96) !important;
+}
+
+/* ── Light mode: streaming caret ────────────────────────── */
+
+html.light .terminal-caret {
+  background: rgba(10, 153, 144, 0.7) !important;
+  box-shadow: 0 0 6px rgba(10, 153, 144, 0.3) !important;
+}
+
+/* ── Light mode: code blocks & mono text ────────────────── */
+
+html.light pre,
+html.light code {
+  background-color: rgba(238, 245, 248, 0.8) !important;
+  color: #16282c !important;
+}
+
+/* ── Light mode: app-shell body text override ───────────── */
+
+html.light .app-shell {
+  color: #16282c;
+}
+
+/* ── Light mode: dot grid ───────────────────────────────── */
+
+html.light .terminal-dot-grid {
+  background-image: radial-gradient(rgba(80, 160, 160, 0.12) 0.8px, transparent 0.8px) !important;
+}
+
+/* ── Light mode: logo area ──────────────────────────────── */
+
+html.light .app-sidebar .terminal-titlebar img {
+  box-shadow: 0 0 0 1px rgba(80, 160, 160, 0.2) !important;
+}
+
+/* ── Light mode: hover states for interactive elements ──── */
+
+html.light .app-shell button:hover,
+html.light .app-modal button:hover {
+  filter: none;
+}
+
+/* ── Light mode: rounded-full toggle knobs ──────────────── */
+
+html.light .app-shell .rounded-full,
+html.light .app-modal .rounded-full {
+  border-radius: 0.25rem;
+}
+
+/* ── Light mode: teal accent colors ─────────────────────── */
+
+html.light .text-teal-400 {
+  color: #0a9990 !important;
+}
+
+html.light .text-teal-400\\/80 {
+  color: rgba(10, 153, 144, 0.8) !important;
+}
+
+html.light .border-teal-200\\/10,
+html.light .border-teal-400\\/20 {
+  border-color: rgba(10, 153, 144, 0.2) !important;
+}
+
+html.light .bg-teal-400 {
+  background-color: #0a9990 !important;
+}
+
+html.light .bg-teal-900\\/30 {
+  background-color: rgba(10, 153, 144, 0.1) !important;
+}
+
+/* ── Light mode: green toggle/active accents ────────────── */
+
+/* Green accents handled by wildcard selectors above */

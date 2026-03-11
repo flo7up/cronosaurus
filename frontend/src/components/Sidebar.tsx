@@ -88,7 +88,7 @@ export default function Sidebar({
                     activeId === agent.id
                       ? "bg-[#0e1922] text-[#b0f0e8] border border-teal-200/10"
                       : hasActiveTrigger
-                        ? "text-[#e9dca6] hover:bg-[#2a1d0f]/85 hover:text-[#fff1ba] border border-amber-400/20 animate-[glow_2s_ease-in-out_infinite]"
+                        ? "text-[#5eebd8] hover:bg-[#0a1a22]/85 hover:text-[#b0f0e8] border border-teal-400/20 animate-[glow_2s_ease-in-out_infinite]"
                         : "text-[#78adb8] hover:bg-[#0f161b]/75 hover:text-[#c9f6ef]"
                   }
                 `}
@@ -99,7 +99,7 @@ export default function Sidebar({
                   <span className="relative shrink-0">
                     <svg
                       className={`w-4 h-4 ${
-                        hasActiveTrigger ? "text-amber-400 animate-[spin_3s_linear_infinite]" : "text-gray-600"
+                        hasActiveTrigger ? "text-teal-400 animate-[spin_3s_linear_infinite]" : "text-gray-600"
                       }`}
                       fill="none"
                       stroke="currentColor"
@@ -113,7 +113,7 @@ export default function Sidebar({
                       />
                     </svg>
                     {hasActiveTrigger && (
-                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-teal-400 rounded-full animate-pulse" />
                     )}
                   </span>
                 ) : (
@@ -133,7 +133,7 @@ export default function Sidebar({
                 )}
                 <span className="truncate flex-1">{agent.name}</span>
                 {hasActiveTrigger && agent.trigger && (
-                  <span className="flex items-center gap-1 text-[10px] text-amber-400/80 shrink-0 bg-amber-900/30 px-1.5 py-0.5 rounded-full">
+                  <span className="flex items-center gap-1 text-[10px] text-teal-400/80 shrink-0 bg-teal-900/30 px-1.5 py-0.5 rounded-full">
                     <svg
                       className="w-2.5 h-2.5"
                       fill="none"

@@ -94,7 +94,7 @@ const TABS: { id: Tab; label: string; description: string }[] = [
   { id: "mcp", label: "MCP Servers", description: "External tool servers" },
   { id: "notifications", label: "Notifications", description: "Channels & groups" },
   { id: "appearance", label: "Appearance", description: "Theme & display" },
-  { id: "settings", label: "Settings", description: "Foundry & models" },
+  { id: "settings", label: "Connections", description: "Foundry & models" },
 ];
 
 // ── Main component ─────────────────────────────────────────

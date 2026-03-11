@@ -846,7 +846,7 @@ function TriggerStatusBar({
   }, [trigger.interval_minutes, isGmailPush]);
 
   const accentActive = isGmailPush ? "terminal-panel text-red-300 hover:bg-red-950/30" : "terminal-panel text-[#8adcca] hover:bg-[#0d1318]";
-  const dotColor = isGmailPush ? "bg-red-400" : "bg-amber-400";
+  const dotColor = isGmailPush ? "bg-red-400" : "bg-teal-400";
 
   return (
     <button
@@ -897,7 +897,7 @@ function TriggerStatusBar({
 
       {/* Countdown / next run (only for scheduled triggers) */}
       {trigger.active && !isGmailPush && countdown && (
-        <span className="ml-auto flex items-center gap-1 font-mono tabular-nums text-amber-400/90">
+        <span className="ml-auto flex items-center gap-1 font-mono tabular-nums text-teal-400/90">
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -1701,7 +1701,7 @@ const TOOL_CATEGORY_STYLES: Record<string, { bg: string; text: string; icon: str
   crypto:     { bg: "bg-yellow-900/30", text: "text-yellow-400", icon: "text-yellow-400", border: "border-yellow-800/40" },
   stock:      { bg: "bg-green-900/30",  text: "text-green-400",  icon: "text-green-400",  border: "border-green-800/40" },
   email:      { bg: "bg-sky-900/30",    text: "text-sky-400",    icon: "text-sky-400",    border: "border-sky-800/40" },
-  trigger:    { bg: "bg-amber-900/30",  text: "text-amber-400",  icon: "text-amber-400",  border: "border-amber-800/40" },
+  trigger:    { bg: "bg-teal-900/30",  text: "text-teal-400",  icon: "text-teal-400",  border: "border-teal-800/40" },
   web:        { bg: "bg-indigo-900/30", text: "text-indigo-400", icon: "text-indigo-400", border: "border-indigo-800/40" },
   polymarket:    { bg: "bg-pink-900/30",   text: "text-pink-400",   icon: "text-pink-400",   border: "border-pink-800/40" },
   notification:  { bg: "bg-rose-900/30",   text: "text-rose-400",   icon: "text-rose-400",   border: "border-rose-800/40" },
