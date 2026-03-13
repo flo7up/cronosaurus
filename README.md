@@ -35,13 +35,13 @@ Create autonomous AI agents with a rich tool ecosystem, schedule recurring tasks
 
 ## Screenshots
 
-| Azure Cost Analysis | Building Progress Monitoring | Mortgage Rate Tracking |
-|:---:|:---:|:---:|
-| ![Azure Cost Analysis](docs/images/azure-cost-analysis.png) | ![Building Progress Monitoring](docs/images/building-progress-monitoring.png) | ![Mortgage Rate Tracking](docs/images/mortgage-rate-tracking.png) |
+| Cost Analysis | Stream Monitoring |
+|:---:|:---:|
+| ![Cost Analysis](docs/images/use-case-cost-analysis.png) | ![Stream Monitoring](docs/images/use-case-stream-monitoring.png) |
 
-| Tool Management | Self Tool Activation | Agent-to-Agent Collaboration |
-|:---:|:---:|:---:|
-| ![Tool Management](docs/images/tool-management.png) | ![Self Tool Activation](docs/images/self-tool-activation.png) | ![Agent-to-Agent Collaboration](docs/images/agent-to-agents.png) |
+| Tool Management | Appearance |
+|:---:|:---:|
+| ![Tool Management](docs/images/tool-management.png) | ![Appearance](docs/images/appearance.png) |
 
 ## Demo Video
 
