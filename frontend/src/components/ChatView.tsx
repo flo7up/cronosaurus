@@ -753,15 +753,15 @@ export default function ChatView({
       {/* Instructions dialog */}
       {showInstructionsDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowInstructionsDialog(false); }}>
-          <div className="terminal-panel mx-4 resize overflow-auto" style={{ width: 540, minWidth: 320, minHeight: 280, maxWidth: '90vw', maxHeight: '90vh' }}>
-            <div className="terminal-titlebar flex items-center justify-between">
+          <div className="terminal-panel mx-4 resize overflow-auto relative" style={{ width: 540, minWidth: 320, minHeight: 280, maxWidth: '90vw', maxHeight: '90vh' }}>
+            <div className="terminal-titlebar">
               <span>agent instructions</span>
-              <button onClick={() => setShowInstructionsDialog(false)} className="text-[#597f8b] hover:text-[#8adcca] transition-colors">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
             </div>
+            <button onClick={() => setShowInstructionsDialog(false)} className="absolute top-2 right-2 p-1 text-[#597f8b] hover:text-[#8adcca] transition-colors z-10">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
             <div className="p-4 space-y-3">
               <p className="text-xs text-[#597f8b]">
                 Custom instructions that shape how this agent behaves. These are prepended to the system prompt.
