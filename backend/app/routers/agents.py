@@ -89,27 +89,15 @@ def create_agent(body: AgentCreate = AgentCreate()):
     _require_ready()
 
     provider = agent_service.provider
-    foundry_agent_id = ""
     thread_id = ""
 
-    if provider == "azure_foundry":
-        # Create Foundry agent + thread in parallel
-        try:
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                agent_future = pool.submit(agent_service.create_foundry_agent, body.model, body.tools, body.custom_instructions)
-                thread_future = pool.submit(agent_service.create_foundry_thread)
-                foundry_agent = agent_future.result()
-                thread_id = thread_future.result()
-                foundry_agent_id = foundry_agent.id
-        except Exception as e:
-            logger.error("Failed to create Foundry resources: %s", e)
-            raise HTTPException(500, f"Failed to create agent: {e}")
-    else:
+    if provider != "azure_foundry":
         # OpenAI / Anthropic — generate a pseudo thread_id for conversation keying
         import uuid
         thread_id = f"{provider}-{uuid.uuid4().hex[:12]}"
 
-    # Persist to Cosmos
+    # Persist to Cosmos immediately — Foundry resources are created lazily
+    # on first message send so the UI opens instantly.
     doc = agent_store.create_agent(
         name=body.name,
         model=body.model,
@@ -117,7 +105,7 @@ def create_agent(body: AgentCreate = AgentCreate()):
         custom_instructions=body.custom_instructions,
         thread_id=thread_id,
         provider=provider,
-        foundry_agent_id=foundry_agent_id,
+        foundry_agent_id="",
     )
     return _agent_to_response(doc)
 
@@ -303,7 +291,32 @@ def send_message(agent_id: str, body: SendAgentMessageRequest):
     doc_provider = (doc.get("provider") or agent_service.provider or "azure_foundry").strip().lower()
     is_first_message = doc.get("name", "New Agent") == "New Agent"
 
-    if not thread_id or (doc_provider == "azure_foundry" and not foundry_agent_id):
+    # Lazy-init Foundry resources on first message (deferred from create_agent for speed)
+    if doc_provider == "azure_foundry" and (not foundry_agent_id or not thread_id):
+        try:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                futures = {}
+                if not foundry_agent_id:
+                    futures["agent"] = pool.submit(
+                        agent_service.create_foundry_agent, model,
+                        doc.get("tools", []), doc.get("custom_instructions", ""),
+                    )
+                if not thread_id:
+                    futures["thread"] = pool.submit(agent_service.create_foundry_thread)
+
+                if "agent" in futures:
+                    foundry_agent_id = futures["agent"].result().id
+                if "thread" in futures:
+                    thread_id = futures["thread"].result()
+
+            agent_store.update_agent(agent_id, {
+                "foundry_agent_id": foundry_agent_id,
+                "thread_id": thread_id,
+            })
+        except Exception as e:
+            logger.error("Lazy Foundry init failed for agent %s: %s", agent_id, e)
+            raise HTTPException(500, f"Failed to initialize agent: {e}")
+    elif doc_provider != "azure_foundry" and not thread_id:
         raise HTTPException(500, "Agent not properly initialized")
 
     # Convert images to data URIs for the provider
