@@ -91,11 +91,10 @@ interface ManagementPanelProps {
 const TABS: { id: Tab; label: string; description: string }[] = [
   { id: "tools", label: "Tools", description: "Manage available tools" },
   { id: "triggers", label: "Triggers", description: "Agent automations" },
-  { id: "email", label: "Email", description: "Account settings" },
   { id: "mcp", label: "MCP Servers", description: "External tool servers" },
   { id: "notifications", label: "Notifications", description: "Channels & groups" },
   { id: "appearance", label: "Appearance", description: "Theme & display" },
-  { id: "settings", label: "Connections", description: "Foundry & models" },
+  { id: "settings", label: "Connections", description: "Providers, email & storage" },
 ];
 
 // ── Main component ─────────────────────────────────────────
@@ -123,8 +122,8 @@ export default function ManagementPanel({
   onToggleMCP,
   onUpdateMCP,
 }: ManagementPanelProps) {
-  const [activeTab, setActiveTab] = useState<Tab>(defaultTab);
-  useEffect(() => setActiveTab(defaultTab), [defaultTab]);
+  const [activeTab, setActiveTab] = useState<Tab>(defaultTab === "email" ? "settings" : defaultTab);
+  useEffect(() => setActiveTab(defaultTab === "email" ? "settings" : defaultTab), [defaultTab]);
 
   // Close on Escape
   useEffect(() => {
@@ -136,7 +135,6 @@ export default function ManagementPanel({
   }, [onClose]);
 
   const activeTriggers = agents.filter((a) => a.trigger?.active).length;
-  const emailCount = emailAccounts.length;
   const mcpCount = mcpServers.filter((s) => s.active).length;
 
   // Toggle trigger for any agent (used by overview)
@@ -189,7 +187,6 @@ export default function ManagementPanel({
             {TABS.map((tab) => {
               const badge =
                 tab.id === "triggers" && activeTriggers > 0 ? activeTriggers
-                : tab.id === "email" && emailCount > 0 ? emailCount
                 : tab.id === "mcp" && mcpCount > 0 ? mcpCount
                 : 0;
               return (
@@ -211,9 +208,7 @@ export default function ManagementPanel({
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${
                       tab.id === "triggers"
                         ? "bg-amber-900/40 text-amber-400"
-                        : tab.id === "email"
-                          ? "bg-[#0f1812] text-[#97ff8a]"
-                          : "bg-[#25150b] text-[#ffcf67]"
+                        : "bg-[#25150b] text-[#ffcf67]"
                     }`}>
                       {badge}
                     </span>
@@ -229,7 +224,7 @@ export default function ManagementPanel({
               <ToolsTab
                 emailAccounts={emailAccounts}
                 onToolLibraryChange={onToolLibraryChange}
-                onSwitchToEmail={() => setActiveTab("email")}
+                onSwitchToEmail={() => setActiveTab("settings")}
                 onSwitchToSettings={() => setActiveTab("settings")}
               />
             )}
@@ -245,15 +240,6 @@ export default function ManagementPanel({
                 onToggleAnyTrigger={handleToggleAnyTrigger}
               />
             )}
-            {activeTab === "email" && (
-              <EmailTab
-                accounts={emailAccounts}
-                onAdd={onAddEmail}
-                onUpdate={onUpdateEmail}
-                onDelete={onDeleteEmail}
-                onTest={onTestEmail}
-              />
-            )}
             {activeTab === "mcp" && (
               <MCPTab
                 servers={mcpServers}
@@ -263,7 +249,15 @@ export default function ManagementPanel({
                 onUpdate={onUpdateMCP}
               />
             )}
-            {activeTab === "settings" && <SettingsTab />}
+            {activeTab === "settings" && (
+              <SettingsTab
+                emailAccounts={emailAccounts}
+                onAddEmail={onAddEmail}
+                onUpdateEmail={onUpdateEmail}
+                onDeleteEmail={onDeleteEmail}
+                onTestEmail={onTestEmail}
+              />
+            )}
             {activeTab === "notifications" && <NotificationsTab />}
             {activeTab === "appearance" && <AppearanceTab />}
           </div>
@@ -2153,7 +2147,19 @@ function CollapsibleSection({ id, title, status, statusLabel, expanded, onToggle
   );
 }
 
-function SettingsTab() {
+function SettingsTab({
+  emailAccounts,
+  onAddEmail,
+  onUpdateEmail,
+  onDeleteEmail,
+  onTestEmail,
+}: {
+  emailAccounts: EmailAccount[];
+  onAddEmail: (data: EmailAccountCreate) => Promise<void>;
+  onUpdateEmail: (id: string, data: Partial<EmailAccountCreate>) => Promise<void>;
+  onDeleteEmail: (id: string) => Promise<void>;
+  onTestEmail: (id: string) => Promise<{ success: boolean; message?: string; error?: string }>;
+}) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -2191,6 +2197,7 @@ function SettingsTab() {
   const [calPassword, setCalPassword] = useState("");
   const [calConfigured, setCalConfigured] = useState(false);
   const [calSaving, setCalSaving] = useState(false);
+  const defaultEmailAccount = emailAccounts.find((account) => account.is_default) ?? emailAccounts[0] ?? null;
 
   // Collapsible sections state
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
@@ -2337,7 +2344,7 @@ function SettingsTab() {
     <div className="space-y-3 max-w-2xl">
       <div className="mb-1">
         <h3 className="text-[#c9f6ef] font-semibold mb-1 uppercase tracking-[0.08em]">Settings</h3>
-        <p className="text-xs text-[#597f8b]">Click a section to configure. <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#97ff8a] inline-block" /> = connected</span></p>
+        <p className="text-xs text-[#597f8b]">Click a section to configure providers, email, and storage. <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#97ff8a] inline-block" /> = connected</span></p>
       </div>
 
       <CollapsibleSection
@@ -2666,6 +2673,33 @@ function SettingsTab() {
           />
           <span className="text-[10px] text-gray-500 self-center whitespace-nowrap">Press Enter</span>
         </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="email"
+        title="Email Accounts"
+        status={emailAccounts.length > 0 ? "configured" : "not-configured"}
+        statusLabel={emailAccounts.length > 0 ? `${emailAccounts.length} account${emailAccounts.length === 1 ? "" : "s"}` : "Not configured"}
+        expanded={expandedSections.has("email")}
+        onToggle={toggleSection}
+      >
+        <p className="text-xs text-gray-500">Configure SMTP and optional IMAP access for email tools, triggers, and outbound agent messages.</p>
+        {defaultEmailAccount && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50">
+            <span className="text-xs text-gray-400">Default:</span>
+            <span className="text-xs text-gray-200">{defaultEmailAccount.label || defaultEmailAccount.from_email}</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${defaultEmailAccount.imap_host ? "bg-green-900/40 text-green-400" : "bg-yellow-900/40 text-yellow-400"}`}>
+              {defaultEmailAccount.imap_host ? "SMTP + IMAP" : "SMTP only"}
+            </span>
+          </div>
+        )}
+        <EmailTab
+          accounts={emailAccounts}
+          onAdd={onAddEmail}
+          onUpdate={onUpdateEmail}
+          onDelete={onDeleteEmail}
+          onTest={onTestEmail}
+        />
       </CollapsibleSection>
 
       <CollapsibleSection
