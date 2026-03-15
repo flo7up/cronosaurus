@@ -112,6 +112,11 @@ from app.tools.tool_management_tools import (
     TOOL_MANAGEMENT_TOOL_NAMES,
     execute_tool_management_tool,
 )
+from app.tools.deep_search_tools import (
+    DEEP_SEARCH_TOOL_DEFINITIONS,
+    DEEP_SEARCH_TOOL_NAMES,
+    execute_deep_search_tool,
+)
 from app.services import mcp_client
 
 logger = logging.getLogger(__name__)
@@ -196,6 +201,7 @@ TOOL_CATALOG: dict[str, list[dict]] = {
     "rss": RSS_TOOL_DEFINITIONS,
     "screenshot": SCREENSHOT_TOOL_DEFINITIONS,
     "tool_management": TOOL_MANAGEMENT_TOOL_DEFINITIONS,
+    "deep_search": DEEP_SEARCH_TOOL_DEFINITIONS,
 }
 
 # Metadata for the tool catalog API (label, description, category)
@@ -295,6 +301,12 @@ TOOL_CATALOG_META: dict[str, dict] = {
         "description": "Capture screenshots of any website. Renders the page with a headless browser and returns an image for visual analysis or notification attachments.",
         "category": "built-in",
         "requires_config": False,
+    },
+    "deep_search": {
+        "label": "Deep Search",
+        "description": "Perform comprehensive multi-step web research using Google Search. Plans sub-questions, iteratively searches and collects evidence, identifies gaps and contradictions, and synthesizes a grounded answer with sources. Requires Google Search API key.",
+        "category": "configurable",
+        "requires_config": True,
     },
     "code_interpreter": {
         "label": "Code Interpreter",
@@ -645,6 +657,35 @@ Rules:
 - After activating or deactivating tools, briefly confirm the change.
 """
 
+DEEP_SEARCH_INSTRUCTIONS_SUFFIX = """
+
+You have access to a deep_search tool for comprehensive, multi-step web research.
+
+Tool: deep_search
+
+When to use:
+- The user asks a complex question that needs information from multiple sources.
+- Accuracy and source quality matter (e.g. comparisons, fact-checking, analysis).
+- The user explicitly asks for thorough or in-depth research.
+- A single web search would not give a complete answer.
+
+When NOT to use:
+- Simple factual lookups (use web_search instead).
+- The user just wants a quick answer or link.
+
+Parameters:
+- query (required): the research question.
+- depth: "light" (fast, ~6 sources), "medium" (default, ~12 sources), "deep" (~20 sources).
+- max_iterations, max_sources, time_budget_seconds: optional overrides.
+
+Behaviour:
+- deep_search plans sub-questions, runs multiple Google searches, fetches pages,
+  extracts content, identifies gaps and contradictions, and returns a synthesized
+  answer with cited sources.
+- The result includes resolved and unresolved questions plus a confidence score.
+- Present the answer clearly and cite the sources provided.
+"""
+
 CONFIRMATION_INSTRUCTIONS_SUFFIX = """
 
 You have the request_confirmation tool. Use it whenever you need the user
@@ -932,6 +973,8 @@ class AgentService:
             instructions += SCREENSHOT_INSTRUCTIONS_SUFFIX
         if "tool_management" in tool_ids:
             instructions += TOOL_MANAGEMENT_INSTRUCTIONS_SUFFIX
+        if "deep_search" in tool_ids:
+            instructions += DEEP_SEARCH_INSTRUCTIONS_SUFFIX
 
         # Add custom tool instructions
         for tid in tool_ids:
@@ -1434,6 +1477,8 @@ class AgentService:
             return execute_tool_management_tool(
                 tool_name=fn_name, arguments=fn_args, agent_id=agent_id,
             )
+        elif fn_name in DEEP_SEARCH_TOOL_NAMES:
+            return execute_deep_search_tool(tool_name=fn_name, arguments=fn_args)
         elif fn_name.startswith("mcp_"):
             return self._execute_mcp_tool(fn_name, fn_args)
         else:

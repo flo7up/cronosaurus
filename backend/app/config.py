@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     # If not set, a key is derived from COSMOS_KEY.
     email_encryption_key: str = ""
 
+    # Google Custom Search (required for deep_search tool)
+    google_search_api_key: str = ""
+    google_search_engine_id: str = ""
+
     class Config:
         env_file = str(_ENV_FILE)
         protected_namespaces = ("settings_",)

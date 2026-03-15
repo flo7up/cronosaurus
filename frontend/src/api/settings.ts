@@ -31,6 +31,8 @@ export async function completeOnboarding(data: {
   cosmos_url?: string;
   cosmos_key?: string;
   cosmos_db?: string;
+  google_search_api_key?: string;
+  google_search_engine_id?: string;
   configure_email?: boolean;
   configure_cosmos?: boolean;
 }): Promise<AppSettings> {

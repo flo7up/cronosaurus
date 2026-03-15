@@ -43,6 +43,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "cosmos_url": "",
     "cosmos_key": "",
     "cosmos_db": "cronosaurus",
+    # Google Custom Search (for deep_search tool)
+    "google_search_api_key": "",
+    "google_search_engine_id": "",
     # Optional tool config flags
     "configure_email": False,
     "configure_cosmos": False,
@@ -90,6 +93,10 @@ class SettingsService:
                 self._settings["anthropic_api_key"] = cfg.anthropic_api_key
             if cfg.model_provider and cfg.model_provider != "azure_foundry":
                 self._settings["model_provider"] = cfg.model_provider
+            if cfg.google_search_api_key:
+                self._settings["google_search_api_key"] = cfg.google_search_api_key
+            if cfg.google_search_engine_id:
+                self._settings["google_search_engine_id"] = cfg.google_search_engine_id
             # If env values are populated, mark onboarding as completed
             if cfg.project_endpoint and cfg.cosmos_url and cfg.cosmos_key:
                 self._settings["onboarding_completed"] = True
@@ -122,6 +129,9 @@ class SettingsService:
             safe.pop("openai_api_key", None)
             safe["anthropic_api_key_set"] = bool(safe.get("anthropic_api_key"))
             safe.pop("anthropic_api_key", None)
+            # Google Search API key
+            safe["google_search_api_key_set"] = bool(safe.get("google_search_api_key"))
+            safe.pop("google_search_api_key", None)
             # Determine storage mode
             safe["storage_mode"] = "cosmos" if safe.get("cosmos_url") and safe.get("cosmos_key_set") else "local"
             return safe

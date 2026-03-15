@@ -15,6 +15,8 @@ class SettingsUpdate(BaseModel):
     cosmos_url: Optional[str] = None
     cosmos_key: Optional[str] = None
     cosmos_db: Optional[str] = None
+    google_search_api_key: Optional[str] = None
+    google_search_engine_id: Optional[str] = None
     configure_email: Optional[bool] = None
     configure_cosmos: Optional[bool] = None
 
@@ -33,6 +35,8 @@ class SettingsResponse(BaseModel):
     cosmos_key: str = ""
     cosmos_key_set: bool = False
     cosmos_db: str = ""
+    google_search_api_key_set: bool = False
+    google_search_engine_id: str = ""
     configure_email: bool = False
     configure_cosmos: bool = False
     storage_mode: str = "local"  # "local" or "cosmos"

@@ -111,6 +111,10 @@ async def lifespan(app: FastAPI):
         object.__setattr__(settings, "cosmos_key", _raw["cosmos_key"])
     if _raw.get("cosmos_db"):
         object.__setattr__(settings, "cosmos_db", _raw["cosmos_db"])
+    if _raw.get("google_search_api_key"):
+        object.__setattr__(settings, "google_search_api_key", _raw["google_search_api_key"])
+    if _raw.get("google_search_engine_id"):
+        object.__setattr__(settings, "google_search_engine_id", _raw["google_search_engine_id"])
     if _raw.get("available_models"):
         from app.models.chat import AVAILABLE_MODELS
         AVAILABLE_MODELS.clear()

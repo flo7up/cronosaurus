@@ -2137,6 +2137,10 @@ function SettingsTab() {
   const [cKey, setCKey] = useState("");
   const [cDb, setCDb] = useState("");
 
+  // Google Search config
+  const [gsKey, setGsKey] = useState("");
+  const [gsEngineId, setGsEngineId] = useState("");
+
   // Calendar config
   const [calProvider, setCalProvider] = useState("google");
   const [calUrl, setCalUrl] = useState("");
@@ -2158,6 +2162,7 @@ function SettingsTab() {
         setCUrl(s.cosmos_url);
         setCKey(s.cosmos_key_set ? "" : "");
         setCDb(s.cosmos_db);
+        setGsEngineId(s.google_search_engine_id || "");
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -2239,10 +2244,12 @@ function SettingsTab() {
         anthropic_model: anthropicModel,
         cosmos_url: cUrl,
         cosmos_db: cDb,
+        google_search_engine_id: gsEngineId,
       };
       if (cKey) payload.cosmos_key = cKey;
       if (openaiKey) payload.openai_api_key = openaiKey;
       if (anthropicKey) payload.anthropic_api_key = anthropicKey;
+      if (gsKey) payload.google_search_api_key = gsKey;
       const result = await updateSettings(payload as Partial<AppSettings>);
       setSettings(result);
       setSaved(true);
@@ -2766,6 +2773,38 @@ function SettingsTab() {
           {cosmosTest.status !== "idle" && cosmosTest.status !== "testing" && (
             <span className={`text-xs ${cosmosTest.status === "success" ? "text-green-400" : "text-red-400"}`}>{cosmosTest.message}</span>
           )}
+        </div>
+      </section>
+
+      {/* Google Search (Deep Search) */}
+      <section className="space-y-3">
+        <h4 className="text-sm font-medium text-gray-300 flex items-center gap-2">
+          <span className={`w-2 h-2 ${settings?.google_search_api_key_set ? "bg-[#97ff8a]" : "bg-gray-600"}`} />
+          Google Search (Deep Search)
+        </h4>
+        <p className="text-[10px] text-gray-500">Required for the deep_search tool. Uses Google Programmable Search Engine.</p>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">
+            API Key
+            {settings?.google_search_api_key_set && <span className="text-green-400 ml-2">(key is set)</span>}
+          </label>
+          <input
+            type="password"
+            value={gsKey}
+            onChange={(e) => setGsKey(e.target.value)}
+            placeholder={settings?.google_search_api_key_set ? "Leave blank to keep current key" : "Google Custom Search API key"}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">Search Engine ID</label>
+          <input
+            type="text"
+            value={gsEngineId}
+            onChange={(e) => setGsEngineId(e.target.value)}
+            placeholder="Programmable Search Engine ID (cx)"
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+          />
         </div>
       </section>
 

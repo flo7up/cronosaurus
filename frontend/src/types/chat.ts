@@ -177,6 +177,8 @@ export interface AppSettings {
   cosmos_key: string;
   cosmos_key_set: boolean;
   cosmos_db: string;
+  google_search_api_key_set: boolean;
+  google_search_engine_id: string;
   configure_email: boolean;
   configure_cosmos: boolean;
   storage_mode: string;

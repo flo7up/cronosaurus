@@ -191,6 +191,8 @@ def _apply_settings_to_runtime(updates: dict) -> None:
         "cosmos_url": "cosmos_url",
         "cosmos_key": "cosmos_key",
         "cosmos_db": "cosmos_db",
+        "google_search_api_key": "google_search_api_key",
+        "google_search_engine_id": "google_search_engine_id",
     }
     for key, attr in mapping.items():
         if key in updates:
