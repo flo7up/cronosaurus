@@ -76,8 +76,20 @@ class AgentStore:
             self._initialized = True
             logger.info("Agent store initialized (db=%s, container=%s)", settings.cosmos_db, CONTAINER_NAME)
         except Exception as e:
-            logger.error("Failed to initialize agent store: %s", e)
-            raise
+            logger.warning(
+                "Failed to initialize agent store with Cosmos DB (%s). "
+                "Falling back to local SQLite.",
+                e,
+            )
+            try:
+                from app.services.local_store import initialize as init_local, get_container
+                init_local()
+                self._container = get_container("agents")
+                self._initialized = True
+                logger.info("Agent store initialized (local SQLite fallback)")
+            except Exception as fallback_error:
+                logger.error("Failed to initialize agent store fallback: %s", fallback_error)
+                raise
 
     def reset(self):
         """Drop cached clients so the store can be reinitialized safely."""

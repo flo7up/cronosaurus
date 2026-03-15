@@ -79,8 +79,21 @@ class UserService:
             self._ensure_user(DEFAULT_USER_ID)
             logger.info("User service initialized (db=%s)", settings.cosmos_db)
         except Exception as e:
-            logger.error("Failed to initialize user service: %s", e)
-            raise
+            logger.warning(
+                "Failed to initialize user service with Cosmos DB (%s). "
+                "Falling back to local SQLite.",
+                e,
+            )
+            try:
+                from app.services.local_store import initialize as init_local, get_container
+                init_local()
+                self._container = get_container("users")
+                self._initialized = True
+                self._ensure_user(DEFAULT_USER_ID)
+                logger.info("User service initialized (local SQLite fallback)")
+            except Exception as fallback_error:
+                logger.error("Failed to initialize user service fallback: %s", fallback_error)
+                raise
 
     def reset(self):
         """Drop cached clients so the service can be reinitialized safely."""

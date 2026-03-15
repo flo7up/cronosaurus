@@ -27,6 +27,9 @@ class MessageStore:
 
     def initialize(self):
         """Connect to the messages container or fall back to local SQLite."""
+        self._container = None
+        self._initialized = False
+
         if not settings.cosmos_url or not settings.cosmos_key:
             from app.services.local_store import initialize as init_local, get_container
             init_local()
@@ -45,7 +48,20 @@ class MessageStore:
             self._initialized = True
             logger.info("Message store initialized (container=%s)", CONTAINER_NAME)
         except Exception as e:
-            logger.error("Failed to initialize message store: %s", e)
+            logger.warning(
+                "Failed to initialize message store with Cosmos DB (%s). "
+                "Falling back to local SQLite.",
+                e,
+            )
+            try:
+                from app.services.local_store import initialize as init_local, get_container
+                init_local()
+                self._container = get_container("messages")
+                self._initialized = True
+                logger.info("Message store initialized (local SQLite fallback)")
+            except Exception as fallback_error:
+                logger.error("Failed to initialize message store fallback: %s", fallback_error)
+                raise
 
     @property
     def is_ready(self) -> bool:

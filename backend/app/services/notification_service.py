@@ -63,8 +63,20 @@ class NotificationService:
             self._initialized = True
             logger.info("Notification service initialized (container=%s)", CONTAINER_NAME)
         except Exception as e:
-            logger.error("Failed to initialize notification service: %s", e)
-            raise
+            logger.warning(
+                "Failed to initialize notification service with Cosmos DB (%s). "
+                "Falling back to local SQLite.",
+                e,
+            )
+            try:
+                from app.services.local_store import initialize as init_local, get_container
+                init_local()
+                self._container = get_container("notifications")
+                self._initialized = True
+                logger.info("Notification service initialized (local SQLite fallback)")
+            except Exception as fallback_error:
+                logger.error("Failed to initialize notification service fallback: %s", fallback_error)
+                raise
 
     def reset(self):
         """Drop cached clients so the service can be reinitialized safely."""

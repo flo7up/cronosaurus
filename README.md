@@ -93,7 +93,7 @@ Set `MODEL_PROVIDER` in your `.env` (or use the onboarding wizard) to choose one
 | **OpenAI** | `openai` | OpenAI API key | Stored in Cosmos DB |
 | **Anthropic** | `anthropic` | Anthropic API key | Stored in Cosmos DB |
 
-> **Note:** All providers require Azure Cosmos DB for agent definitions, user settings, tool configs, and email accounts.
+> **Note:** Cosmos DB is recommended for cloud persistence. If Cosmos is not configured (or credentials are invalid), Cronosaurus falls back to local SQLite storage.
 
 ## Built-in Tools
 
@@ -124,7 +124,7 @@ Tools are modular — enable only what each agent needs. Custom tools can be add
 
 - **Python 3.12+**
 - **Node.js 20+** and npm
-- **Azure Cosmos DB** NoSQL account
+- **Azure Cosmos DB** NoSQL account (optional, for cloud persistence)
 - **One LLM provider:** Azure AI Foundry, OpenAI, or Anthropic
 
 ### 1. Clone the repository
@@ -158,7 +158,7 @@ python -m venv venv
 # Windows: venv\Scripts\activate
 # macOS/Linux: source venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --reload-dir app --host 0.0.0.0 --port 8000
 ```
 
 **Frontend:**
@@ -175,7 +175,7 @@ Open **http://localhost:5173** — a guided wizard will walk you through:
 
 1. **LLM Provider** — Choose Azure AI Foundry, OpenAI, or Anthropic and enter credentials
 2. **Models** — Select which models appear in the model selector
-3. **Cosmos DB** — Provide your database URL and key
+3. **Cosmos DB** — Optional: provide your database URL and key for cloud persistence
 4. **Tools** — Optionally enable email and other integrations
 
 All settings are saved to `backend/settings.json` and can be changed anytime from **Management Panel > Settings**.
@@ -257,12 +257,12 @@ All settings via environment variables or `backend/.env`:
 | `ANTHROPIC_API_KEY` | Yes | — | Anthropic API key |
 | `ANTHROPIC_MODEL` | No | `claude-sonnet-4-20250514` | Default model |
 
-### Azure Cosmos DB (required)
+### Azure Cosmos DB (optional, enables cloud persistence)
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `COSMOS_URL` | Yes | — | Cosmos DB account URL |
-| `COSMOS_KEY` | Yes | — | Cosmos DB primary key |
+| `COSMOS_URL` | No | — | Cosmos DB account URL |
+| `COSMOS_KEY` | No | — | Cosmos DB primary key |
 | `COSMOS_DB` | No | `cronosaurus` | Database name |
 | `COSMOS_CONNECTION_STRING` | No | — | Alternative to URL + key |
 

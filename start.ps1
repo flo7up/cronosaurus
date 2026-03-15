@@ -28,7 +28,7 @@ if ($env:_CRONOSAURUS_RUNNER -eq "backend") {
     & "$RootDir\backend\venv\Scripts\Activate.ps1"
     pip install -q -r requirements.txt
     Write-Host "Backend running on http://localhost:8000" -ForegroundColor Green
-    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    uvicorn app.main:app --reload --reload-dir app --host 0.0.0.0 --port 8000
     return
 }
 
