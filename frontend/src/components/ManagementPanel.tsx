@@ -230,6 +230,7 @@ export default function ManagementPanel({
                 emailAccounts={emailAccounts}
                 onToolLibraryChange={onToolLibraryChange}
                 onSwitchToEmail={() => setActiveTab("email")}
+                onSwitchToSettings={() => setActiveTab("settings")}
               />
             )}
             {activeTab === "triggers" && (
@@ -368,7 +369,7 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
   ),
 };
 
-function ToolRow({ tool, onToggle }: { tool: ToolCatalogEntry; onToggle: () => void }) {
+function ToolRow({ tool, onToggle, onSetup }: { tool: ToolCatalogEntry; onToggle: () => void; onSetup?: () => void }) {
   const icon = TOOL_ICONS[tool.id];
   const needsConfig = tool.requires_config && !tool.available;
   return (
@@ -390,7 +391,11 @@ function ToolRow({ tool, onToggle }: { tool: ToolCatalogEntry; onToggle: () => v
             {tool.label}
           </span>
           {needsConfig && (
-            <span className="terminal-chip text-[10px] px-1.5 py-0.5 text-yellow-300">
+            <span
+              role="link"
+              onClick={(e) => { if (onSetup) { e.stopPropagation(); onSetup(); } }}
+              className={`terminal-chip text-[10px] px-1.5 py-0.5 text-yellow-300 ${onSetup ? "cursor-pointer hover:text-yellow-200 hover:underline" : ""}`}
+            >
               Needs setup
             </span>
           )}
@@ -410,10 +415,12 @@ function ToolsTab({
   emailAccounts,
   onToolLibraryChange,
   onSwitchToEmail,
+  onSwitchToSettings,
 }: {
   emailAccounts: EmailAccount[];
   onToolLibraryChange: (library: string[]) => void;
   onSwitchToEmail: () => void;
+  onSwitchToSettings: () => void;
 }) {
   const [catalog, setCatalog] = useState<ToolCatalogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -550,6 +557,7 @@ function ToolsTab({
               key={tool.id}
               tool={tool}
               onToggle={() => handleToggle(tool.id, tool.in_library)}
+              onSetup={tool.requires_config && !tool.available ? onSwitchToSettings : undefined}
             />
           ))}
         </div>
@@ -2110,6 +2118,41 @@ const ALL_MODELS = [
   "model-router",
 ];
 
+function CollapsibleSection({ id, title, status, statusLabel, expanded, onToggle, children }: {
+  id: string;
+  title: string;
+  status: "configured" | "not-configured";
+  statusLabel: string;
+  expanded: boolean;
+  onToggle: (id: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border border-gray-700/40 rounded-lg overflow-hidden">
+      <button
+        onClick={() => onToggle(id)}
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#0e1922]/50 transition-colors text-left"
+      >
+        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+          status === "configured" ? "bg-[#97ff8a]" : "bg-gray-600"
+        }`} />
+        <span className="text-sm font-medium text-gray-200 flex-1">{title}</span>
+        <span className={`text-[10px] mr-2 ${
+          status === "configured" ? "text-[#97ff8a]/70" : "text-gray-500"
+        }`}>{statusLabel}</span>
+        <svg className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {expanded && (
+        <div className="px-4 pb-4 space-y-3 border-t border-gray-700/30">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsTab() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -2148,6 +2191,17 @@ function SettingsTab() {
   const [calPassword, setCalPassword] = useState("");
   const [calConfigured, setCalConfigured] = useState(false);
   const [calSaving, setCalSaving] = useState(false);
+
+  // Collapsible sections state
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const toggleSection = (id: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   useEffect(() => {
     fetchSettings()
@@ -2280,18 +2334,20 @@ function SettingsTab() {
   if (loading) return <div className="text-gray-500 text-sm">Loading settings...</div>;
 
   return (
-    <div className="space-y-8 max-w-2xl">
-      <div>
+    <div className="space-y-3 max-w-2xl">
+      <div className="mb-1">
         <h3 className="text-[#c9f6ef] font-semibold mb-1 uppercase tracking-[0.08em]">Settings</h3>
-        <p className="text-xs text-[#597f8b]">Configure your model provider, API keys, and database connection.</p>
+        <p className="text-xs text-[#597f8b]">Click a section to configure. <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#97ff8a] inline-block" /> = connected</span></p>
       </div>
 
-      {/* Provider selection */}
-      <section className="space-y-3">
-        <h4 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-          <span className="w-2 h-2 bg-[#3dd8c5]" />
-          Model Provider
-        </h4>
+      <CollapsibleSection
+        id="provider"
+        title="Model Provider"
+        status={(provider === "azure_foundry" ? !!endpoint : provider === "openai" ? !!settings?.openai_api_key_set : !!settings?.anthropic_api_key_set) ? "configured" : "not-configured"}
+        statusLabel={provider === "azure_foundry" ? "Azure AI Foundry" : provider === "openai" ? "OpenAI" : "Anthropic"}
+        expanded={expandedSections.has("provider")}
+        onToggle={toggleSection}
+      >
         <div className="grid grid-cols-3 gap-2">
           {([
             { id: "azure_foundry", label: "Azure AI Foundry", desc: "Microsoft Foundry Agent Service" },
@@ -2312,7 +2368,6 @@ function SettingsTab() {
             </button>
           ))}
         </div>
-      </section>
 
       {/* OpenAI API Key */}
       {provider === "openai" && (
@@ -2447,13 +2502,16 @@ function SettingsTab() {
         </details>
       </section>
       )}
+      </CollapsibleSection>
 
-      {/* Models */}
-      <section className="space-y-3">
-        <h4 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-          <span className="w-2 h-2 bg-[#97ff8a]" />
-          Available Models
-        </h4>
+      <CollapsibleSection
+        id="models"
+        title="Available Models"
+        status={models.length > 0 ? "configured" : "not-configured"}
+        statusLabel={models.length > 0 ? `${models.length} selected` : "None selected"}
+        expanded={expandedSections.has("models")}
+        onToggle={toggleSection}
+      >
         <p className="text-xs text-[#597f8b]">Select which models appear in the model selector dropdown.</p>
 
         {/* Load models — provider-aware */}
@@ -2608,14 +2666,16 @@ function SettingsTab() {
           />
           <span className="text-[10px] text-gray-500 self-center whitespace-nowrap">Press Enter</span>
         </div>
-      </section>
+      </CollapsibleSection>
 
-      {/* Calendar */}
-      <section className="space-y-3">
-        <h4 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-          <span className={`w-2 h-2 ${calConfigured ? "bg-[#97ff8a]" : "bg-gray-600"}`} />
-          Calendar (CalDAV)
-        </h4>
+      <CollapsibleSection
+        id="calendar"
+        title="Calendar (CalDAV)"
+        status={calConfigured ? "configured" : "not-configured"}
+        statusLabel={calConfigured ? "Connected" : "Not configured"}
+        expanded={expandedSections.has("calendar")}
+        onToggle={toggleSection}
+      >
         <p className="text-xs text-gray-500">
           Connect a calendar to let agents read your schedule and create events. Supports Google Calendar, Apple iCloud, Nextcloud, and any CalDAV server.
         </p>
@@ -2714,14 +2774,16 @@ function SettingsTab() {
             </button>
           )}
         </div>
-      </section>
+      </CollapsibleSection>
 
-      {/* Storage / Cosmos DB */}
-      <section className="space-y-3">
-        <h4 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-          <span className={`w-2 h-2 ${settings?.storage_mode === "cosmos" ? "bg-[#97ff8a]" : "bg-teal-400"}`} />
-          Data Storage
-        </h4>
+      <CollapsibleSection
+        id="storage"
+        title="Data Storage"
+        status="configured"
+        statusLabel={settings?.storage_mode === "cosmos" ? "Cosmos DB" : "Local (SQLite)"}
+        expanded={expandedSections.has("storage")}
+        onToggle={toggleSection}
+      >
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800/50 border border-gray-700/50">
           <span className="text-xs text-gray-400">Mode:</span>
           <span className={`text-xs font-medium ${settings?.storage_mode === "cosmos" ? "text-[#97ff8a]" : "text-teal-400"}`}>
@@ -2774,14 +2836,16 @@ function SettingsTab() {
             <span className={`text-xs ${cosmosTest.status === "success" ? "text-green-400" : "text-red-400"}`}>{cosmosTest.message}</span>
           )}
         </div>
-      </section>
+      </CollapsibleSection>
 
-      {/* Google Search (Deep Search) */}
-      <section className="space-y-3">
-        <h4 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-          <span className={`w-2 h-2 ${settings?.google_search_api_key_set ? "bg-[#97ff8a]" : "bg-gray-600"}`} />
-          Google Search (Deep Search)
-        </h4>
+      <CollapsibleSection
+        id="google_search"
+        title="Google Search (Deep Search)"
+        status={settings?.google_search_api_key_set ? "configured" : "not-configured"}
+        statusLabel={settings?.google_search_api_key_set ? "Connected" : "Not configured"}
+        expanded={expandedSections.has("google_search")}
+        onToggle={toggleSection}
+      >
         <p className="text-[10px] text-gray-500">Required for the deep_search tool. Uses Google Programmable Search Engine.</p>
         <div>
           <label className="block text-xs text-gray-400 mb-1">
@@ -2806,7 +2870,7 @@ function SettingsTab() {
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
           />
         </div>
-      </section>
+      </CollapsibleSection>
 
       {/* Save */}
       <div className="flex items-center gap-3 pt-2">

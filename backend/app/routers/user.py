@@ -300,6 +300,10 @@ def get_tool_catalog():
             available = False
         elif tool_id == "calendar" and not calendar_configured:
             available = False
+        elif tool_id == "deep_search":
+            from app.tools.deep_search_tools import is_configured as _ds_configured
+            if not _ds_configured():
+                available = False
 
         entries.append(ToolCatalogEntry(
             id=tool_id,
