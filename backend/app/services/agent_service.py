@@ -117,6 +117,16 @@ from app.tools.deep_search_tools import (
     DEEP_SEARCH_TOOL_NAMES,
     execute_deep_search_tool,
 )
+from app.tools.bluesky_tools import (
+    BLUESKY_TOOL_DEFINITIONS,
+    BLUESKY_TOOL_NAMES,
+    execute_bluesky_tool,
+)
+from app.tools.x_tools import (
+    X_TOOL_DEFINITIONS,
+    X_TOOL_NAMES,
+    execute_x_tool,
+)
 from app.services import mcp_client
 
 logger = logging.getLogger(__name__)
@@ -202,6 +212,8 @@ TOOL_CATALOG: dict[str, list[dict]] = {
     "screenshot": SCREENSHOT_TOOL_DEFINITIONS,
     "tool_management": TOOL_MANAGEMENT_TOOL_DEFINITIONS,
     "deep_search": DEEP_SEARCH_TOOL_DEFINITIONS,
+    "bluesky": BLUESKY_TOOL_DEFINITIONS,
+    "x": X_TOOL_DEFINITIONS,
 }
 
 # Metadata for the tool catalog API (label, description, category)
@@ -305,6 +317,18 @@ TOOL_CATALOG_META: dict[str, dict] = {
     "deep_search": {
         "label": "Deep Search",
         "description": "Perform comprehensive multi-step web research using Google Search. Plans sub-questions, iteratively searches and collects evidence, identifies gaps and contradictions, and synthesizes a grounded answer with sources. Requires Google Search API key.",
+        "category": "configurable",
+        "requires_config": True,
+    },
+    "bluesky": {
+        "label": "Bluesky",
+        "description": "Read and interact with Bluesky via the AT Protocol. View timelines, search posts, create posts, reply, repost, like, and check notifications. Requires Bluesky handle and App Password in Settings.",
+        "category": "configurable",
+        "requires_config": True,
+    },
+    "x": {
+        "label": "X (Twitter)",
+        "description": "Read and interact with X (Twitter). Post, reply, search, like, repost, bookmark, and read timelines. Free tier supports posting; most read and interaction actions require a paid API plan (Basic or Pro).",
         "category": "configurable",
         "requires_config": True,
     },
@@ -1479,6 +1503,10 @@ class AgentService:
             )
         elif fn_name in DEEP_SEARCH_TOOL_NAMES:
             return execute_deep_search_tool(tool_name=fn_name, arguments=fn_args)
+        elif fn_name in BLUESKY_TOOL_NAMES:
+            return execute_bluesky_tool(tool_name=fn_name, arguments=fn_args)
+        elif fn_name in X_TOOL_NAMES:
+            return execute_x_tool(tool_name=fn_name, arguments=fn_args)
         elif fn_name.startswith("mcp_"):
             return self._execute_mcp_tool(fn_name, fn_args)
         else:
