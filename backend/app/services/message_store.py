@@ -92,7 +92,7 @@ class MessageStore:
         except Exception as e:
             logger.warning("Failed to store message for thread %s: %s", thread_id, e)
 
-    def get_messages(self, thread_id: str) -> list[dict]:
+    def get_messages(self, thread_id: str, include_image_only: bool = False) -> list[dict]:
         """Return the last N user/assistant messages for a thread."""
         if not self._initialized:
             return []
@@ -114,7 +114,12 @@ class MessageStore:
             result = []
             for m in items:
                 # Skip image-only placeholder records (empty content, only images)
-                if not m.get("content") and not m.get("tool_steps") and m.get("images"):
+                if (
+                    not include_image_only
+                    and not m.get("content")
+                    and not m.get("tool_steps")
+                    and m.get("images")
+                ):
                     continue
                 entry: dict = {"role": m["role"], "content": m.get("content", "")}
                 if m.get("images"):

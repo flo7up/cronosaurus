@@ -29,11 +29,25 @@ export interface Agent {
   email_account_id: string | null;
   custom_instructions: string;
   notification_group_id: string | null;
+  role: "agent" | "master";
+  managed_by: string | null;
   thread_id: string;
   foundry_agent_id: string;
   trigger: AgentTrigger | null;
   created_at: string;
   updated_at: string;
+}
+
+// ── Delegation (master→sub-agent async tasks) ──
+
+export interface Delegation {
+  delegation_id: string;
+  sub_agent_id: string;
+  task: string;
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  priority: "high" | "normal" | "low";
+  result_preview?: string;
+  created_at: string;
 }
 
 // ── Legacy Conversation (kept for type compat, mapped from Agent) ──

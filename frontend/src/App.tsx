@@ -20,6 +20,7 @@ import {
   updateAgentTrigger,
   deleteAgentTrigger,
   checkAgentBusy,
+  fetchActiveDelegationAgents,
 } from "./api/agent";
 import {
   fetchPreferences,
@@ -92,6 +93,7 @@ function App() {
   const [agentBusy, setAgentBusy] = useState<AgentBusyState>(IDLE_BUSY_STATE);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
+  const [delegationAgentIds, setDelegationAgentIds] = useState<string[]>([]);
 
   // Check onboarding status first, then load the rest
   useEffect(() => {
@@ -117,7 +119,21 @@ function App() {
     if (!onboardingChecked || showOnboarding) return;
 
     const loadData = () => {
-      fetchAgents().then(setAgents).catch(() => {});
+      fetchAgents().then((agentList) => {
+        setAgents(agentList);
+        // Auto-create master agent if none exists
+        if (!agentList.some(a => a.role === "master")) {
+          createAgent({
+            name: "Master Agent",
+            model: "gpt-4.1-mini",
+            tools: ["orchestration", "notifications", "tool_management"],
+            role: "master",
+          }).then((master) => {
+            setAgents((prev) => [master, ...prev]);
+            setActiveId(master.id);
+          }).catch((e) => console.error("Failed to auto-create master agent:", e));
+        }
+      }).catch(() => {});
       fetchModels().then((m) => { if (m.length > 0) setModels(m); }).catch(() => {});
       fetchPreferences().then((p) => {
         if (p.selected_model) setSelectedModel(p.selected_model);
@@ -313,6 +329,19 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Poll active delegation agents for sidebar visual
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () => {
+      fetchActiveDelegationAgents().then((ids) => {
+        if (!cancelled) setDelegationAgentIds(ids);
+      });
+    };
+    poll();
+    const iv = setInterval(poll, 3_000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, []);
+
   const handleNewAgent = useCallback(async () => {
     try {
       const agent = await createAgent({ model: selectedModel });
@@ -324,6 +353,26 @@ function App() {
       console.error(e);
     }
   }, [selectedModel]);
+
+  const handleUpdateRole = useCallback(async (role: "agent" | "master") => {
+    if (!activeId) return;
+    try {
+      const updated = await updateAgent(activeId, { role } as any);
+      setAgents((prev) => prev.map((a) => (a.id === activeId ? updated : a)));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [activeId]);
+
+  const handleUpdateManagedBy = useCallback(async (masterId: string | null) => {
+    if (!activeId) return;
+    try {
+      const updated = await updateAgent(activeId, { managed_by: masterId } as any);
+      setAgents((prev) => prev.map((a) => (a.id === activeId ? updated : a)));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [activeId]);
 
   const handleNewAgentWithPrompt = useCallback(async (_prompt: string, tools?: string[]) => {
     try {
@@ -345,6 +394,10 @@ function App() {
 
   const handleDelete = useCallback(
     async (id: string) => {
+      // Prevent deleting master agent
+      const agent = agents.find(a => a.id === id);
+      if (agent?.role === "master") return;
+
       stopAgentStream(id, false);
       // Optimistic: remove from UI immediately
       const prevAgents = agents;
@@ -508,6 +561,10 @@ function App() {
                   ? (result.todos as TodoItem[])
                   : prev.todos,
             }));
+            // Refresh sidebar when master creates a new agent
+            if (name === "create_agent" && result.success) {
+              fetchAgents().then(setAgents).catch(() => {});
+            }
           },
           // onNameUpdate — auto-generated agent name
           (newName: string) => {
@@ -843,6 +900,7 @@ function App() {
         agents={agents}
         activeId={activeId}
         streamingAgentIds={streamingAgentIds}
+        delegationAgentIds={delegationAgentIds}
         onSelect={handleSelect}
         onNew={handleNewAgent}
         onDelete={handleDelete}
@@ -883,6 +941,9 @@ function App() {
         onNotificationGroupChange={handleNotificationGroupChange}
         onOpenNotifications={() => setShowNotifications(true)}
         unreadNotifications={unreadNotifications}
+        allAgents={agents}
+        onUpdateRole={handleUpdateRole}
+        onUpdateManagedBy={handleUpdateManagedBy}
       />
       {showManagement && (
         <ManagementPanel

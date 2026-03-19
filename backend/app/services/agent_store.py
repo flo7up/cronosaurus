@@ -114,6 +114,8 @@ class AgentStore:
         foundry_agent_id: str = "",
         user_id: str = DEFAULT_USER_ID,
         custom_instructions: str = "",
+        role: str = "agent",
+        managed_by: str | None = None,
     ) -> dict:
         """Create a new agent document."""
         now = datetime.now(timezone.utc).isoformat()
@@ -127,6 +129,8 @@ class AgentStore:
             "thread_id": thread_id,
             "provider": provider,
             "foundry_agent_id": foundry_agent_id,
+            "role": role,
+            "managed_by": managed_by,
             "trigger": None,
             "created_at": now,
             "updated_at": now,

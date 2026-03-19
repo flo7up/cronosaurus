@@ -1,4 +1,4 @@
-import type { Agent, AgentTrigger, Message, SSEEvent, ToolStep } from "../types/chat";
+import type { Agent, AgentTrigger, Delegation, Message, SSEEvent, ToolStep } from "../types/chat";
 
 const BASE = "/api/agents";
 
@@ -34,6 +34,8 @@ export async function createAgent(data?: {
   name?: string;
   model?: string;
   tools?: string[];
+  role?: "agent" | "master";
+  managed_by?: string | null;
 }): Promise<Agent> {
   const res = await fetch(BASE, {
     method: "POST",
@@ -299,4 +301,45 @@ export async function testAgentTrigger(agentId: string): Promise<TriggerTestResu
     throw new Error(err.detail || "Failed to test trigger");
   }
   return res.json();
+}
+
+// ── Delegations ───────────────────────────────────────────────
+
+export interface DelegationDetail {
+  id: string;
+  sub_agent_id: string;
+  sub_agent_name: string;
+  task: string;
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  priority: "high" | "normal" | "low";
+  result_summary: string | null;
+  error: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export async function fetchDelegations(
+  agentId: string,
+  status?: string,
+  limit?: number
+): Promise<DelegationDetail[]> {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (limit) params.set("limit", String(limit));
+  const qs = params.toString();
+  const res = await fetch(`${BASE}/${agentId}/delegations${qs ? `?${qs}` : ""}`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function fetchActiveDelegationAgents(): Promise<string[]> {
+  try {
+    const res = await fetch(`${BASE}/delegations/active-agents`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.agent_ids ?? [];
+  } catch {
+    return [];
+  }
 }

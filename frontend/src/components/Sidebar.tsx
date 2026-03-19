@@ -4,6 +4,7 @@ interface SidebarProps {
   agents: Agent[];
   activeId: string | null;
   streamingAgentIds: string[];
+  delegationAgentIds: string[];
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
@@ -16,6 +17,7 @@ export default function Sidebar({
   agents,
   activeId,
   streamingAgentIds,
+  delegationAgentIds,
   onSelect,
   onNew,
   onDelete,
@@ -23,8 +25,11 @@ export default function Sidebar({
   onToggle,
   onOpenSettings,
 }: SidebarProps) {
-  // Sort: active triggers first, then the rest by created_at desc
+  // Sort: master agents first, then active triggers, then the rest
   const sortedAgents = [...agents].sort((a, b) => {
+    const aMaster = a.role === "master" ? 0 : 1;
+    const bMaster = b.role === "master" ? 0 : 1;
+    if (aMaster !== bMaster) return aMaster - bMaster;
     const aActive = a.trigger?.active ? 0 : 1;
     const bActive = b.trigger?.active ? 0 : 1;
     if (aActive !== bActive) return aActive - bActive;
@@ -80,6 +85,7 @@ export default function Sidebar({
             const hasTrigger = !!agent.trigger;
             const hasActiveTrigger = agent.trigger?.active ?? false;
             const isStreaming = streamingAgentIds.includes(agent.id);
+            const isDelegating = delegationAgentIds.includes(agent.id);
 
             return (
               <div
@@ -92,6 +98,8 @@ export default function Sidebar({
                       ? "bg-[#0e1922] text-[#b0f0e8] border border-teal-200/10"
                       : isStreaming
                         ? "text-[#ffcf67] hover:bg-[#1a160d]/85 hover:text-[#ffe5a8] border border-[#ffcf67]/20 shadow-[0_0_18px_rgba(255,207,103,0.08)]"
+                      : isDelegating
+                        ? "text-[#c4a5ff] hover:bg-[#1a1225]/85 hover:text-[#dcc5ff] border border-[#c4a5ff]/20 shadow-[0_0_18px_rgba(196,165,255,0.08)]"
                       : hasActiveTrigger
                         ? "text-[#5eebd8] hover:bg-[#0a1a22]/85 hover:text-[#b0f0e8] border border-teal-400/20 animate-[glow_2s_ease-in-out_infinite]"
                         : "text-[#78adb8] hover:bg-[#0f161b]/75 hover:text-[#c9f6ef]"
@@ -99,8 +107,21 @@ export default function Sidebar({
                 `}
                 onClick={() => onSelect(agent.id)}
               >
-                {/* Icon: clock for triggered, robot for normal */}
-                {hasTrigger ? (
+                {/* Icon: crown for master, clock for triggered, robot for normal */}
+                {agent.role === "master" ? (
+                  <span className="relative shrink-0">
+                    <svg
+                      className={`w-4 h-4 ${isStreaming ? "text-[#ffcf67] animate-pulse" : "text-amber-400"}`}
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M2.5 19h19v2h-19v-2zm19.57-9.36c-.21-.8-1.04-1.28-1.84-1.06L14.92 10l-2.37-6.31c-.28-.75-1.18-1.02-1.82-.56L5.17 7.35l-2.14-.68c-.81-.26-1.67.18-1.93.99-.21.67.05 1.37.62 1.74l7.67 5.01c.33.22.74.24 1.1.07l10.57-5.01c.75-.36 1.14-1.24.93-2.03l.08.15z" />
+                    </svg>
+                    {isStreaming && (
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full animate-pulse bg-[#ffcf67]" />
+                    )}
+                  </span>
+                ) : hasTrigger ? (
                   <span className="relative shrink-0">
                     <svg
                       className={`w-4 h-4 ${
@@ -128,24 +149,46 @@ export default function Sidebar({
                     )}
                   </span>
                 ) : (
-                  <svg
-                    className={`w-4 h-4 shrink-0 ${isStreaming ? "text-[#ffcf67] animate-pulse" : ""}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 00.659 1.591L19 14.5M14.25 3.104c.251.023.501.05.75.082M19 14.5l-2.47 2.47a3.375 3.375 0 01-4.06.644L12 17.5l-.47.114a3.375 3.375 0 01-4.06-.644L5 14.5m14 0V17a2.25 2.25 0 01-2.25 2.25H7.25A2.25 2.25 0 015 17v-2.5"
-                    />
-                  </svg>
+                  <span className="relative shrink-0">
+                    <svg
+                      className={`w-4 h-4 ${isStreaming ? "text-[#ffcf67] animate-pulse" : isDelegating ? "text-[#c4a5ff] animate-pulse" : ""}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714a2.25 2.25 0 00.659 1.591L19 14.5M14.25 3.104c.251.023.501.05.75.082M19 14.5l-2.47 2.47a3.375 3.375 0 01-4.06.644L12 17.5l-.47.114a3.375 3.375 0 01-4.06-.644L5 14.5m14 0V17a2.25 2.25 0 01-2.25 2.25H7.25A2.25 2.25 0 015 17v-2.5"
+                      />
+                    </svg>
+                    {isDelegating && (
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full animate-pulse bg-[#c4a5ff]" />
+                    )}
+                  </span>
                 )}
-                <span className="truncate flex-1">{agent.name}</span>
+                <span className="truncate flex-1" title={agent.name}>{agent.name}</span>
+                {agent.role === "master" && (
+                  <span className="terminal-chip shrink-0 bg-amber-900/30 text-[10px] text-amber-400 border-amber-400/25 px-1.5 py-0.5">
+                    master
+                  </span>
+                )}
+                {agent.managed_by && (
+                  <span className="terminal-chip shrink-0 bg-teal-900/20 text-[10px] text-teal-500/70 border-teal-500/15 px-1.5 py-0.5">
+                    sub
+                  </span>
+                )}
                 {isStreaming ? (
                   <span className="terminal-chip shrink-0 bg-[#23190a] text-[10px] text-[#ffcf67] border-[#ffcf67]/25 px-1.5 py-0.5">
                     live
+                  </span>
+                ) : isDelegating ? (
+                  <span className="flex items-center gap-1 terminal-chip shrink-0 bg-purple-900/30 text-[10px] text-[#c4a5ff] border-[#c4a5ff]/25 px-1.5 py-0.5 animate-pulse">
+                    <svg className="w-2.5 h-2.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    working
                   </span>
                 ) : hasActiveTrigger && agent.trigger ? (
                   <span className="flex items-center gap-1 text-[10px] text-teal-400/80 shrink-0 bg-teal-900/30 px-1.5 py-0.5 rounded-full">
@@ -165,27 +208,29 @@ export default function Sidebar({
                     {agent.trigger.interval_minutes}m
                   </span>
                 ) : null}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(agent.id);
-                  }}
-                  className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 transition-opacity"
-                >
-                  <svg
-                    className="w-3.5 h-3.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+                {agent.role !== "master" && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(agent.id);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 transition-opacity"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    />
-                  </svg>
-                </button>
+                    <svg
+                      className="w-3.5 h-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </button>
+                )}
               </div>
             );
           })}

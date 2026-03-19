@@ -50,6 +50,9 @@ interface ChatViewProps {
   onNotificationGroupChange: (groupId: string | null) => void;
   onOpenNotifications: () => void;
   unreadNotifications: number;
+  allAgents: Agent[];
+  onUpdateRole: (role: "agent" | "master") => void;
+  onUpdateManagedBy: (masterId: string | null) => void;
 }
 
 export default function ChatView({
@@ -85,12 +88,16 @@ export default function ChatView({
   onNotificationGroupChange,
   onOpenNotifications,
   unreadNotifications,
+  allAgents,
+  onUpdateRole,
+  onUpdateManagedBy,
 }: ChatViewProps) {
   const [input, setInput] = useState("");
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [attachedImages, setAttachedImages] = useState<Array<{ data: string; media_type: string; preview: string }>>([]);
   const [showInstructionsDialog, setShowInstructionsDialog] = useState(false);
   const [instructionsDraft, setInstructionsDraft] = useState("");
+  const [showApiDialog, setShowApiDialog] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<{ src: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -399,6 +406,27 @@ export default function ChatView({
           </svg>
         </button>
         <AgentNameEditor name={activeAgent.name} onRename={onRenameAgent} />
+        {/* Master/sub-agent role indicator */}
+        {activeAgent.role === "master" ? (
+          <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-900/30 px-2 py-1 rounded-full border border-amber-400/20">
+            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M2.5 19h19v2h-19v-2zm19.57-9.36c-.21-.8-1.04-1.28-1.84-1.06L14.92 10l-2.37-6.31c-.28-.75-1.18-1.02-1.82-.56L5.17 7.35l-2.14-.68c-.81-.26-1.67.18-1.93.99-.21.67.05 1.37.62 1.74l7.67 5.01c.33.22.74.24 1.1.07l10.57-5.01c.75-.36 1.14-1.24.93-2.03l.08.15z" />
+            </svg>
+            Master
+          </span>
+        ) : (
+          <select
+            value={activeAgent.managed_by || ""}
+            onChange={(e) => onUpdateManagedBy(e.target.value || null)}
+            className="text-[10px] bg-[#0a1218] text-[#78adb8] border border-[#3dd8c5]/15 rounded px-1.5 py-1 focus:outline-none focus:border-[#3dd8c5]/40"
+            title="Assign to a master agent"
+          >
+            <option value="">No master</option>
+            {allAgents.filter(a => a.role === "master" && a.id !== activeAgent.id).map(m => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+        )}
         {models.length > 0 && (
           <ModelSelector
             models={models}
@@ -458,6 +486,17 @@ export default function ChatView({
             />
           </svg>
         </button>
+        {/* API endpoint button */}
+        <Tooltip text="API endpoint">
+          <button
+            onClick={() => setShowApiDialog(true)}
+            className="terminal-control p-1.5 text-[#597f8b] hover:text-[#8adcca] hover:bg-[#0d1318] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </button>
+        </Tooltip>
         {serviceReady === false && (
           <span className="ml-auto flex items-center gap-1.5 terminal-chip px-2 py-1 text-[10px] text-amber-400 border-amber-500/25">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
@@ -805,6 +844,70 @@ export default function ChatView({
                 >
                   Save
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* API Endpoint dialog */}
+      {showApiDialog && activeAgent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowApiDialog(false); }}>
+          <div className="terminal-panel mx-4 overflow-auto relative" style={{ width: 600, maxWidth: '90vw', maxHeight: '90vh' }}>
+            <div className="terminal-titlebar">
+              <span>api endpoint</span>
+            </div>
+            <button onClick={() => setShowApiDialog(false)} className="absolute top-2 right-2 p-1 text-[#597f8b] hover:text-[#8adcca] transition-colors z-10">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="p-4 space-y-4">
+              <p className="text-xs text-[#597f8b]">
+                Use this REST endpoint to invoke <span className="text-[#8adcca]">{activeAgent.name}</span> programmatically.
+              </p>
+
+              <div className="space-y-2">
+                <div className="text-[10px] text-[#597f8b] uppercase tracking-wider font-semibold">Endpoint</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-amber-400 bg-amber-900/30 px-1.5 py-0.5 rounded">POST</span>
+                  <code className="flex-1 text-xs text-[#8adcca] bg-[#0a0e12] px-2 py-1 rounded border border-[#3dd8c5]/10 select-all">
+                    {`${window.location.origin}/api/agents/${activeAgent.id}/invoke`}
+                  </code>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/agents/${activeAgent.id}/invoke`)}
+                    className="terminal-control p-1 text-[#597f8b] hover:text-[#8adcca] transition-colors"
+                    title="Copy URL"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-[10px] text-[#597f8b] uppercase tracking-wider font-semibold">Request Body</div>
+                <pre className="text-xs text-[#c9f6ef] bg-[#0a0e12] px-3 py-2 rounded border border-[#3dd8c5]/10 overflow-x-auto select-all">{JSON.stringify({ message: "What is the current Bitcoin price?" }, null, 2)}</pre>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-[10px] text-[#597f8b] uppercase tracking-wider font-semibold">Response</div>
+                <pre className="text-xs text-[#c9f6ef] bg-[#0a0e12] px-3 py-2 rounded border border-[#3dd8c5]/10 overflow-x-auto select-all">{JSON.stringify({ agent_id: activeAgent.id, agent_name: activeAgent.name, response: "The current price of...", model: activeAgent.model, tools_used: [] }, null, 2)}</pre>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-[10px] text-[#597f8b] uppercase tracking-wider font-semibold">cURL Example</div>
+                <pre className="text-xs text-[#c9f6ef] bg-[#0a0e12] px-3 py-2 rounded border border-[#3dd8c5]/10 overflow-x-auto select-all whitespace-pre-wrap">{`curl -X POST ${window.location.origin}/api/agents/${activeAgent.id}/invoke \\
+  -H "Content-Type: application/json" \\
+  -d '{"message": "Hello, what can you do?"}'`}</pre>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-[10px] text-[#597f8b] uppercase tracking-wider font-semibold">Agent Catalog</div>
+                <p className="text-xs text-[#597f8b]">
+                  List all agents and their endpoints: <code className="text-[#8adcca] select-all">GET {window.location.origin}/api/agents/api-catalog</code>
+                </p>
               </div>
             </div>
           </div>

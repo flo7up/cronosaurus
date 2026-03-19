@@ -171,6 +171,7 @@ Depth levels: `light` (1 iteration, 6 sources), `medium` (3 iterations, 12 sourc
 | Tool Management | `tool_management_tools.py` | Enable/disable tools at runtime | None (internal) |
 | Bluesky | `bluesky_tools.py` | AT Protocol: timeline, search, post, reply, repost, like, notifications | Per-user: Bluesky handle + App Password (encrypted in Cosmos DB via user preferences) |
 | X (Twitter) | `x_tools.py` | Post, reply, search, like, repost, bookmark, timeline, mentions | Per-user: Bearer Token + OAuth 1.0a keys (encrypted in Cosmos DB via user preferences). See tier table below |
+| Orchestration | `orchestration_tools.py` | Master agent delegation: delegate, poll, cancel, summarize sub-agents | None (internal, auto-added to role=master agents) |
 
 ##### X (Twitter) API Tier Requirements
 
@@ -262,10 +263,11 @@ Messages are sent via `POST /api/agents/{id}/messages` and received as `text/eve
 
 ```
 Database: cronosaurus
-  ├── agents       (partition key: /user_id)  — Agent definitions + embedded triggers
-  ├── users        (partition key: /id)        — User preferences, MCP servers, email accounts
-  ├── messages     (partition key: /thread_id) — Conversation history (OpenAI/Anthropic only)
-  └── notifications (partition key: /user_id)  — Notification records
+  ├── agents       (partition key: /user_id)       — Agent definitions + embedded triggers
+  ├── users        (partition key: /id)             — User preferences, MCP servers, email accounts
+  ├── messages     (partition key: /thread_id)      — Conversation history (OpenAI/Anthropic only)
+  ├── notifications (partition key: /user_id)       — Notification records
+  └── delegations  (partition key: /master_agent_id) — Async task delegations from master to sub-agents
 ```
 
 Foundry-provider conversations are stored server-side in Azure AI Foundry threads.
@@ -282,6 +284,8 @@ Foundry-provider conversations are stored server-side in Azure AI Foundry thread
   "thread_id": "thread-id",
   "foundry_agent_id": "foundry-agent-id",
   "provider": "azure_foundry",
+  "role": "agent | master",
+  "managed_by": "master-agent-id | null",
   "trigger": {
     "type": "regular | gmail_push | custom",
     "interval_minutes": 30,
@@ -297,6 +301,24 @@ Foundry-provider conversations are stored server-side in Azure AI Foundry thread
 }
 ```
 
+### Delegation Document
+
+```json
+{
+  "id": "uuid",
+  "master_agent_id": "master-uuid",
+  "sub_agent_id": "sub-agent-uuid",
+  "task": "Check BTC momentum and flag >5% moves",
+  "priority": "normal | high | low",
+  "status": "pending | running | completed | failed | cancelled",
+  "result_summary": "BTC +7.2% (flagged)...",
+  "error": null,
+  "created_at": "ISO-8601",
+  "started_at": "ISO-8601 | null",
+  "completed_at": "ISO-8601 | null"
+}
+```
+
 ---
 
 ## Key Design Decisions
@@ -304,6 +326,33 @@ Foundry-provider conversations are stored server-side in Azure AI Foundry thread
 ### Multi-Agent, Not Multi-Conversation
 
 Each agent is a first-class entity with its own tools, model, conversation thread, and triggers. Agents are isolated — one agent's errors don't affect others. Agents can discover and message each other via collaboration tools.
+
+### Master Agent Orchestration
+
+A master agent (`role: "master"`) acts as the user's primary contact point, coordinating sub-agents (`managed_by: master_agent_id`) via async delegation — not tool calls.
+
+**Delegation model**: The master uses `delegate_task()` to assign work to sub-agents asynchronously. A background worker (`delegation_worker`, 5s tick) picks up pending delegations, executes them on the sub-agent's thread, and stores a structured result summary. The master polls `check_delegation()` for results.
+
+**Summary protocol**: Sub-agents don't send full conversation history to the master. Instead, each delegation result is a structured summary (objective, findings, confidence, recommended actions), capped at ~2000 tokens. The master can request deeper context via `get_agent_summary()` which sends a focused meta-question to the sub-agent.
+
+**Orchestration tools** (master-only):
+
+| Tool | Purpose |
+|------|---------|
+| `list_managed_agents` | Discover sub-agents and their capabilities |
+| `delegate_task` | Assign a task to a sub-agent (async, returns delegation_id) |
+| `check_delegation` | Poll delegation status + get result |
+| `list_delegations` | Overview of all pending/completed delegations |
+| `cancel_delegation` | Cancel a pending or running delegation |
+| `get_agent_summary` | Ask a sub-agent a focused question about its recent work |
+
+**Safety controls**:
+- Master agents cannot be managed by another master
+- Sub-agents cannot use delegation tools
+- Max 10 active delegations per master at once
+- Delegations fail if the sub-agent has no active thread
+
+**Frontend**: Master agents are pinned to the top of the sidebar with a crown icon. Sub-agents show a "sub" label. The delegations API (`GET /api/agents/{id}/delegations`) provides status for UI panels.
 
 ### Provider Abstraction
 

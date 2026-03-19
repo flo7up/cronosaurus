@@ -19,6 +19,8 @@ from app.services.message_store import message_store
 from app.services.notification_service import notification_service
 from app.services.trigger_scheduler import trigger_scheduler
 from app.services.gmail_push_service import gmail_push_service
+from app.services.delegation_store import delegation_store
+from app.services.delegation_worker import delegation_worker
 
 # ── Auto-discover custom trigger services ───────────────────────
 _custom_trigger_services: list = []
@@ -127,6 +129,21 @@ async def lifespan(app: FastAPI):
     await _init_service(agent_store.initialize, "agent_store")
     await _init_service(agent_service.initialize, "agent_service")
     await _init_service(notification_service.initialize, "notification_service")
+    await _init_service(delegation_store.initialize, "delegation_store")
+
+    # Auto-assign unassigned agents to the master (if one exists)
+    if agent_store.is_ready:
+        try:
+            all_agents = agent_store.list_agents()
+            masters = [a for a in all_agents if a.get("role") == "master"]
+            if len(masters) == 1:
+                master_id = masters[0]["id"]
+                for a in all_agents:
+                    if a["id"] != master_id and a.get("role") != "master" and not a.get("managed_by"):
+                        agent_store.update_agent(a["id"], {"managed_by": master_id})
+                        logger.info("Auto-assigned agent '%s' to master '%s'", a["name"], masters[0]["name"])
+        except Exception as e:
+            logger.warning("Auto-assign agents failed: %s", e)
 
     # Start async background services
     if agent_store.is_ready and agent_service.is_ready:
@@ -134,6 +151,8 @@ async def lifespan(app: FastAPI):
         logger.info("Trigger scheduler started")
         await gmail_push_service.start()
         logger.info("Gmail push service started")
+        await delegation_worker.start()
+        logger.info("Delegation worker started")
         # Start custom trigger services
         for meta, svc in _custom_trigger_services:
             try:
@@ -155,6 +174,10 @@ async def lifespan(app: FastAPI):
         # Shutdown
         try:
             await gmail_push_service.stop()
+        except Exception:
+            pass
+        try:
+            await delegation_worker.stop()
         except Exception:
             pass
         try:

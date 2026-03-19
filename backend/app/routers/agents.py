@@ -18,6 +18,8 @@ from app.models.agent import (
     AgentTriggerCreate,
     AgentTriggerUpdate,
     SendAgentMessageRequest,
+    InvokeAgentRequest,
+    InvokeAgentResponse,
     AgentResponse,
     AgentTriggerResponse,
     MessageResponse,
@@ -51,6 +53,8 @@ def _agent_to_response(doc: dict) -> AgentResponse:
         email_account_id=doc.get("email_account_id"),
         custom_instructions=doc.get("custom_instructions", ""),
         notification_group_id=doc.get("notification_group_id"),
+        role=doc.get("role", "agent"),
+        managed_by=doc.get("managed_by"),
         thread_id=doc.get("thread_id", ""),
         foundry_agent_id=doc.get("foundry_agent_id", ""),
         trigger=trigger_resp,
@@ -75,6 +79,45 @@ def list_models():
     return {"models": AVAILABLE_MODELS}
 
 
+@router.get("/delegations/active-agents")
+def active_delegation_agents():
+    """Return agent IDs that have active (pending/running) delegations."""
+    from app.services.delegation_store import delegation_store
+    if not delegation_store.is_ready:
+        return {"agent_ids": []}
+    try:
+        pending = delegation_store.get_pending_delegations()
+        running = delegation_store.get_running_delegations()
+        active = pending + running
+        agent_ids = list({d["sub_agent_id"] for d in active})
+        return {"agent_ids": agent_ids}
+    except Exception:
+        return {"agent_ids": []}
+
+
+@router.get("/api-catalog")
+def api_catalog():
+    """List all agents with their API invoke endpoints."""
+    _require_ready()
+    docs = agent_store.list_agents()
+    catalog = []
+    for d in docs:
+        catalog.append({
+            "agent_id": d["id"],
+            "name": d["name"],
+            "model": d.get("model", ""),
+            "tools": d.get("tools", []),
+            "role": d.get("role", "agent"),
+            "endpoint": f"/api/agents/{d['id']}/invoke",
+            "method": "POST",
+            "request_body": {
+                "message": "string (required)",
+                "images": "[{data: base64, media_type: string}] (optional)",
+            },
+        })
+    return {"agents": catalog}
+
+
 # ── Agent CRUD ───────────────────────────────────────────────────
 
 @router.get("", response_model=list[AgentResponse])
@@ -88,6 +131,12 @@ def list_agents():
 def create_agent(body: AgentCreate = AgentCreate()):
     _require_ready()
 
+    # Enforce single master agent
+    if body.role == "master":
+        existing = agent_store.list_agents()
+        if any(a.get("role") == "master" for a in existing):
+            raise HTTPException(409, "A master agent already exists. Only one master agent is allowed.")
+
     provider = agent_service.provider
     thread_id = ""
 
@@ -95,6 +144,15 @@ def create_agent(body: AgentCreate = AgentCreate()):
         # OpenAI / Anthropic — generate a pseudo thread_id for conversation keying
         import uuid
         thread_id = f"{provider}-{uuid.uuid4().hex[:12]}"
+
+    # Auto-assign: if creating a regular agent, assign to existing master;
+    # if creating a master, adopt all unassigned agents.
+    managed_by = body.managed_by
+    if body.role != "master" and not managed_by:
+        existing = agent_store.list_agents()
+        masters = [a for a in existing if a.get("role") == "master"]
+        if len(masters) == 1:
+            managed_by = masters[0]["id"]
 
     # Persist to Cosmos immediately — Foundry resources are created lazily
     # on first message send so the UI opens instantly.
@@ -106,7 +164,16 @@ def create_agent(body: AgentCreate = AgentCreate()):
         thread_id=thread_id,
         provider=provider,
         foundry_agent_id="",
+        role=body.role,
+        managed_by=managed_by,
     )
+
+    # If we just created a master, adopt all existing unassigned agents
+    if body.role == "master":
+        for a in agent_store.list_agents():
+            if a["id"] != doc["id"] and a.get("role") != "master" and not a.get("managed_by"):
+                agent_store.update_agent(a["id"], {"managed_by": doc["id"]})
+
     return _agent_to_response(doc)
 
 
@@ -166,9 +233,20 @@ def update_agent(agent_id: str, body: AgentUpdate):
                 except Exception as e:
                     logger.warning("Failed to update Foundry agent in place: %s", e)
 
+    # If role changed to master, auto-assign all unassigned agents
+    role_became_master = (
+        updates.get("role") == "master" and doc.get("role") != "master"
+    )
+
     doc = agent_store.update_agent(agent_id, updates)
     if not doc:
         raise HTTPException(404, "Agent not found")
+
+    if role_became_master:
+        for a in agent_store.list_agents():
+            if a["id"] != agent_id and a.get("role") != "master" and not a.get("managed_by"):
+                agent_store.update_agent(a["id"], {"managed_by": agent_id})
+
     return _agent_to_response(doc)
 
 
@@ -178,6 +256,9 @@ def delete_agent(agent_id: str):
     doc = agent_store.get_agent(agent_id)
     if not doc:
         raise HTTPException(404, "Agent not found")
+
+    if doc.get("role") == "master":
+        raise HTTPException(400, "The master agent cannot be deleted.")
 
     doc_provider = (doc.get("provider") or agent_service.provider or "azure_foundry").strip().lower()
 
@@ -361,6 +442,81 @@ def send_message(agent_id: str, body: SendAgentMessageRequest):
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },
+    )
+
+
+# ── Agent API (synchronous invoke) ──────────────────────────────
+
+@router.post("/{agent_id}/invoke", response_model=InvokeAgentResponse)
+def invoke_agent(agent_id: str, body: InvokeAgentRequest):
+    """Invoke an agent synchronously — send a message, get the full response."""
+    _require_ready()
+    doc = agent_store.get_agent(agent_id)
+    if not doc:
+        raise HTTPException(404, "Agent not found")
+
+    foundry_agent_id = doc.get("foundry_agent_id", "")
+    thread_id = doc.get("thread_id", "")
+    model = doc.get("model", "gpt-4.1-mini")
+    doc_provider = (doc.get("provider") or agent_service.provider or "azure_foundry").strip().lower()
+
+    # Lazy-init Foundry resources if needed
+    if doc_provider == "azure_foundry" and (not foundry_agent_id or not thread_id):
+        try:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                futures = {}
+                if not foundry_agent_id:
+                    futures["agent"] = pool.submit(
+                        agent_service.create_foundry_agent, model,
+                        doc.get("tools", []), doc.get("custom_instructions", ""),
+                    )
+                if not thread_id:
+                    futures["thread"] = pool.submit(agent_service.create_foundry_thread)
+
+                if "agent" in futures:
+                    foundry_agent_id = futures["agent"].result().id
+                if "thread" in futures:
+                    thread_id = futures["thread"].result()
+
+            agent_store.update_agent(agent_id, {
+                "foundry_agent_id": foundry_agent_id,
+                "thread_id": thread_id,
+            })
+        except Exception as e:
+            logger.error("Lazy Foundry init failed for agent %s: %s", agent_id, e)
+            raise HTTPException(500, f"Failed to initialize agent: {e}")
+    elif doc_provider != "azure_foundry" and not thread_id:
+        raise HTTPException(500, "Agent not properly initialized")
+
+    # Convert images
+    image_data = None
+    if body.images:
+        image_data = [
+            {"data_uri": f"data:{img.media_type};base64,{img.data}", "media_type": img.media_type, "data": img.data}
+            for img in body.images
+        ]
+
+    try:
+        response = agent_service.run_non_streaming(
+            agent_id=agent_id,
+            foundry_agent_id=foundry_agent_id,
+            thread_id=thread_id,
+            model=model,
+            content=body.message,
+            tools=doc.get("tools", []),
+            provider=doc_provider,
+            images=image_data,
+            custom_instructions=doc.get("custom_instructions", ""),
+        )
+    except Exception as e:
+        logger.error("invoke_agent error for %s: %s", agent_id, e, exc_info=True)
+        raise HTTPException(500, f"Agent invocation failed: {e}")
+
+    return InvokeAgentResponse(
+        agent_id=agent_id,
+        agent_name=doc.get("name", ""),
+        response=response or "",
+        model=model,
     )
 
 
@@ -600,3 +756,45 @@ def test_trigger(agent_id: str):
         "total_matches": len(matching),
         "explanation": f"Found {len(matching)} email(s) that match your filters. Each would generate the agent input shown in 'agent_input_preview'.",
     }
+
+
+# ── Delegations ──────────────────────────────────────────────────
+
+@router.get("/{agent_id}/delegations")
+def list_delegations(agent_id: str, status: str | None = None, limit: int = 20):
+    """List delegations for a master agent."""
+    _require_ready()
+    doc = agent_store.get_agent(agent_id)
+    if not doc:
+        raise HTTPException(404, "Agent not found")
+    if doc.get("role") != "master":
+        raise HTTPException(400, "Only master agents have delegations")
+
+    from app.services.delegation_store import delegation_store
+    if not delegation_store.is_ready:
+        raise HTTPException(503, "Delegation store not initialized")
+
+    docs = delegation_store.list_delegations(agent_id, status=status, limit=min(limit, 50))
+
+    # Resolve sub-agent names
+    agents_cache: dict[str, str] = {}
+    result = []
+    for d in docs:
+        sub_id = d["sub_agent_id"]
+        if sub_id not in agents_cache:
+            sub = agent_store.get_agent(sub_id)
+            agents_cache[sub_id] = sub["name"] if sub else "Unknown"
+        result.append({
+            "id": d["id"],
+            "sub_agent_id": sub_id,
+            "sub_agent_name": agents_cache[sub_id],
+            "task": d["task"],
+            "status": d["status"],
+            "priority": d.get("priority", "normal"),
+            "result_summary": d.get("result_summary"),
+            "error": d.get("error"),
+            "created_at": d["created_at"],
+            "started_at": d.get("started_at"),
+            "completed_at": d.get("completed_at"),
+        })
+    return result

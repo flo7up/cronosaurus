@@ -13,6 +13,8 @@ class AgentCreate(BaseModel):
     email_account_id: Optional[str] = None
     custom_instructions: str = ""
     notification_group_id: Optional[str] = None  # None/"auto" = agent decides, or a specific group ID
+    role: str = "agent"  # "agent" or "master"
+    managed_by: Optional[str] = None  # master agent ID (only for role="agent")
 
 
 class AgentUpdate(BaseModel):
@@ -22,6 +24,8 @@ class AgentUpdate(BaseModel):
     email_account_id: Optional[str] = None
     custom_instructions: Optional[str] = None
     notification_group_id: Optional[str] = None
+    role: Optional[str] = None
+    managed_by: Optional[str] = None
 
 
 class AgentTriggerCreate(BaseModel):
@@ -60,6 +64,21 @@ class SendAgentMessageRequest(BaseModel):
     images: list[ImageAttachment] = Field(default_factory=list)
 
 
+class InvokeAgentRequest(BaseModel):
+    """Synchronous agent invocation — send a message, get a response."""
+    message: str
+    images: list[ImageAttachment] = Field(default_factory=list)
+
+
+class InvokeAgentResponse(BaseModel):
+    """Response from a synchronous agent invocation."""
+    agent_id: str
+    agent_name: str
+    response: str
+    model: str
+    tools_used: list[str] = Field(default_factory=list)
+
+
 # ── Response models ──────────────────────────────────────────────
 
 class AgentTriggerResponse(BaseModel):
@@ -91,6 +110,8 @@ class AgentResponse(BaseModel):
     email_account_id: Optional[str] = None
     custom_instructions: str = ""
     notification_group_id: Optional[str] = None
+    role: str = "agent"
+    managed_by: Optional[str] = None
     thread_id: str
     foundry_agent_id: str = ""
     trigger: Optional[AgentTriggerResponse] = None

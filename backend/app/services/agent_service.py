@@ -127,6 +127,13 @@ from app.tools.x_tools import (
     X_TOOL_NAMES,
     execute_x_tool,
 )
+from app.tools.orchestration_tools import (
+    ORCHESTRATION_TOOL_DEFINITIONS,
+    ORCHESTRATION_TOOL_NAMES,
+    ORCHESTRATION_INSTRUCTIONS_SUFFIX,
+    SUB_AGENT_INSTRUCTIONS_SUFFIX,
+    execute_orchestration_tool,
+)
 from app.services import mcp_client
 
 logger = logging.getLogger(__name__)
@@ -214,6 +221,7 @@ TOOL_CATALOG: dict[str, list[dict]] = {
     "deep_search": DEEP_SEARCH_TOOL_DEFINITIONS,
     "bluesky": BLUESKY_TOOL_DEFINITIONS,
     "x": X_TOOL_DEFINITIONS,
+    "orchestration": ORCHESTRATION_TOOL_DEFINITIONS,
 }
 
 # Metadata for the tool catalog API (label, description, category)
@@ -331,6 +339,12 @@ TOOL_CATALOG_META: dict[str, dict] = {
         "description": "Read and interact with X (Twitter). Post, reply, search, like, repost, bookmark, and read timelines. Free tier supports posting; most read and interaction actions require a paid API plan (Basic or Pro).",
         "category": "configurable",
         "requires_config": True,
+    },
+    "orchestration": {
+        "label": "Orchestration (Master)",
+        "description": "Master agent tools for delegating tasks to sub-agents, monitoring progress, and synthesizing results. Automatically added to agents with role=master.",
+        "category": "built-in",
+        "requires_config": False,
     },
     "code_interpreter": {
         "label": "Code Interpreter",
@@ -671,14 +685,25 @@ your own set of enabled tools at runtime.
 
 Tools: list_available_tools, activate_tools, deactivate_tools
 
+PROACTIVE TOOL DISCOVERY — CRITICAL BEHAVIOR:
+- When the user asks you to do something and you don't have the right tool,
+  IMMEDIATELY call list_available_tools to check what's available.
+- If a relevant tool exists but is not active, tell the user which tool would
+  help and ASK if they want you to activate it. For example:
+  "I don't have the Twitch capture tool active. I can see 'twitch_capture' is
+   available — would you like me to activate it so I can monitor streams?"
+- If the user agrees (or says yes), call activate_tools to enable it, then
+  proceed with the original request using the newly activated tool.
+- NEVER say "I can't do that" if there is an inactive tool that could help.
+  Always check first and offer to activate it.
+- After activating or deactivating tools, briefly confirm the change.
+- The 'tool_management' tool itself cannot be deactivated.
+
 Rules:
 - Use list_available_tools to see every tool on the platform and which
   ones are currently active on you.
-- Use activate_tools to enable new capabilities (e.g. web_search, weather)
-  when the user asks you to do something you cannot do yet.
+- Use activate_tools to enable new capabilities when needed.
 - Use deactivate_tools to disable tools the user no longer needs.
-- The 'tool_management' tool itself cannot be deactivated.
-- After activating or deactivating tools, briefly confirm the change.
 """
 
 DEEP_SEARCH_INSTRUCTIONS_SUFFIX = """
@@ -1007,6 +1032,20 @@ class AgentService:
                 if suffix:
                     instructions += suffix
 
+        # Add orchestration / sub-agent instructions based on agent role
+        if agent_id:
+            from app.services.agent_store import agent_store
+            try:
+                doc = agent_store.get_agent(agent_id)
+                if doc:
+                    role = doc.get("role", "agent")
+                    if role == "master":
+                        instructions += ORCHESTRATION_INSTRUCTIONS_SUFFIX
+                    elif doc.get("managed_by"):
+                        instructions += SUB_AGENT_INSTRUCTIONS_SUFFIX
+            except Exception:
+                pass
+
         # Add MCP server instructions
         mcp_ids = [tid for tid in tool_ids if tid.startswith("mcp:")]
         if mcp_ids:
@@ -1218,7 +1257,20 @@ class AgentService:
 
         file_data = image.get("data")
         if isinstance(file_data, str) and file_data:
-            return base64.b64decode(file_data), media_type, filename
+            cleaned = "".join(file_data.strip().split())
+            if cleaned.startswith("data:"):
+                header, _, encoded = cleaned.partition(",")
+                if encoded and ";base64" in header:
+                    media_type = header[5:].split(";", 1)[0] or media_type
+                    filename = image.get("filename") or f"cronosaurus-image-{int(time.time() * 1000)}.{self._guess_image_extension(media_type)}"
+                    cleaned = encoded
+            try:
+                missing_padding = len(cleaned) % 4
+                if missing_padding:
+                    cleaned += "=" * (4 - missing_padding)
+                return base64.b64decode(cleaned), media_type, filename
+            except Exception as e:
+                logger.warning("Failed to decode image payload from stored 'data': %s", e)
 
         data_uri = image.get("data_uri")
         if isinstance(data_uri, str) and data_uri.startswith("data:"):
@@ -1228,7 +1280,15 @@ class AgentService:
             if ";base64" in header:
                 media_type = header[5:].split(";", 1)[0] or media_type
                 filename = image.get("filename") or f"cronosaurus-image-{int(time.time() * 1000)}.{self._guess_image_extension(media_type)}"
-                return base64.b64decode(encoded), media_type, filename
+                try:
+                    cleaned = "".join(encoded.strip().split())
+                    missing_padding = len(cleaned) % 4
+                    if missing_padding:
+                        cleaned += "=" * (4 - missing_padding)
+                    return base64.b64decode(cleaned), media_type, filename
+                except Exception as e:
+                    logger.warning("Failed to decode image payload from data URI: %s", e)
+                    return None, media_type, filename
 
         return None, media_type, filename
 
@@ -1433,10 +1493,10 @@ class AgentService:
                 "success": False,
                 "error": (
                     f"Tool '{fn_name}' failed with an unexpected error: {e}. "
-                    "DO NOT retry this tool call. Instead, explain the error "
-                    "to the user and suggest alternatives if possible."
+                    "You may retry this call once. If it fails again, try a different "
+                    "approach or alternative tool to accomplish the same goal."
                 ),
-                "retryable": False,
+                "retryable": True,
             }
 
     def _dispatch_tool(
@@ -1507,6 +1567,10 @@ class AgentService:
             return execute_bluesky_tool(tool_name=fn_name, arguments=fn_args)
         elif fn_name in X_TOOL_NAMES:
             return execute_x_tool(tool_name=fn_name, arguments=fn_args)
+        elif fn_name in ORCHESTRATION_TOOL_NAMES:
+            return execute_orchestration_tool(
+                tool_name=fn_name, arguments=fn_args, agent_id=agent_id,
+            )
         elif fn_name.startswith("mcp_"):
             return self._execute_mcp_tool(fn_name, fn_args)
         else:
@@ -1799,6 +1863,33 @@ class AgentService:
                         "data_uri": f"data:{ci['media_type']};base64,{ci['data']}",
                     })
 
+            # If user sent no images, check for recent images in conversation history
+            # so the agent can reference previously captured/provided images
+            if not images:
+                try:
+                    from app.services.message_store import message_store as _ms
+                    recent_msgs = _ms.get_messages(thread_id, include_image_only=True)
+                    # Walk backwards to find the most recent message with images
+                    for msg in reversed(recent_msgs):
+                        msg_images = msg.get("images")
+                        if msg_images and isinstance(msg_images, list):
+                            images = []
+                            for img in msg_images[-3:]:  # limit to last 3 images
+                                if img.get("data") and img.get("media_type"):
+                                    images.append({
+                                        "data": img["data"],
+                                        "media_type": img["media_type"],
+                                        "data_uri": f"data:{img['media_type']};base64,{img['data']}",
+                                    })
+                            if images:
+                                logger.info(
+                                    "Re-attached %d recent image(s) from conversation history for thread %s",
+                                    len(images), thread_id,
+                                )
+                            break
+                except Exception as hist_err:
+                    logger.warning("Failed to retrieve conversation images: %s", hist_err)
+
             # Persist user images to Cosmos for reload
             if images:
                 from app.services.message_store import message_store
@@ -1833,6 +1924,10 @@ class AgentService:
 
             # Initial stream — yield deltas immediately
             run = None
+            logger.info(
+                "stream_response: starting run for agent=%s foundry=%s thread=%s model=%s tools=%d",
+                agent_id, foundry_agent.id, thread_id, model, len(tools or []),
+            )
             with self.client.runs.stream(
                 thread_id=thread_id,
                 agent_id=foundry_agent.id,
@@ -1866,6 +1961,11 @@ class AgentService:
             round_count = 0
             retry_attempted = False
             max_rounds = 20
+            run_status_after_stream = getattr(run, "status", None) if run else None
+            logger.info(
+                "stream_response: initial stream done, run=%s status=%s response_len=%d",
+                run.id if run else "none", run_status_after_stream, len(full_response),
+            )
             while (
                 _HAS_FUNCTION_TOOLS
                 and run
@@ -1924,11 +2024,32 @@ class AgentService:
                     tool_outputs=tool_outputs,
                 )
 
-                for _poll in range(120):
-                    if run.status in ("completed", "failed", "cancelled", "expired", "requires_action"):
-                        break
-                    time.sleep(0.5)
-                    run = self.client.runs.get(thread_id=thread_id, run_id=run.id)
+                # Stream the response after tool outputs (captures text deltas)
+                try:
+                    for _poll in range(120):
+                        if run.status in ("completed", "failed", "cancelled", "expired", "requires_action"):
+                            break
+                        time.sleep(0.5)
+                        run = self.client.runs.get(thread_id=thread_id, run_id=run.id)
+
+                    # If completed, fetch the final assistant message text
+                    if run.status == "completed":
+                        try:
+                            msgs = self.client.messages.list(
+                                thread_id=thread_id,
+                                order=ListSortOrder.DESCENDING,
+                            )
+                            for msg in msgs:
+                                if msg.role == "assistant" and msg.text_messages:
+                                    post_tool_text = msg.text_messages[-1].text.value or ""
+                                    if post_tool_text and post_tool_text != full_response:
+                                        full_response = post_tool_text
+                                        yield json.dumps({"type": "delta", "content": post_tool_text})
+                                    break
+                        except Exception as fetch_err:
+                            logger.warning("Failed to fetch post-tool response: %s", fetch_err)
+                except Exception as poll_err:
+                    logger.warning("Post-tool-output polling error: %s", poll_err)
 
             # ── Handle non-completed terminal states ─────────────────
             run_status = getattr(run, "status", None) if run else None
@@ -1970,11 +2091,63 @@ class AgentService:
                     )
                     retry_attempted = True
                     try:
-                        # Create a new run on the same thread (message already posted)
+                        # Force-recreate the Foundry agent to clear any corrupted state
+                        logger.info("Recreating Foundry agent %s to clear bad state", foundry_agent_id)
+                        try:
+                            self.delete_foundry_agent(foundry_agent.id)
+                        except Exception:
+                            pass
+                        self._foundry_agents.pop(foundry_agent.id, None)
+                        if hasattr(self, "_agent_config_cache"):
+                            self._agent_config_cache.pop(foundry_agent.id, None)
+                        new_agent = self.create_foundry_agent(model, tools or [], custom_instructions)
+                        logger.info("Recreated Foundry agent: %s -> %s", foundry_agent_id, new_agent.id)
+
+                        # Cancel any active runs on the thread first
+                        try:
+                            runs = self.client.runs.list(thread_id=thread_id)
+                            for r in runs:
+                                if r.status in ("queued", "in_progress", "requires_action"):
+                                    logger.info("Cancelling stuck run %s (status=%s) before retry", r.id, r.status)
+                                    self.client.runs.cancel(thread_id=thread_id, run_id=r.id)
+                                    # Wait for cancellation
+                                    for _w in range(10):
+                                        r = self.client.runs.get(thread_id=thread_id, run_id=r.id)
+                                        if r.status in ("cancelled", "failed", "completed", "expired"):
+                                            break
+                                        time.sleep(0.5)
+                        except Exception as cancel_err:
+                            logger.warning("Failed to cancel stuck runs: %s", cancel_err)
+
+                        # If thread is too corrupted, create a fresh one
+                        try:
+                            new_thread_id = self.create_foundry_thread()
+                            # Re-post the user message to the fresh thread
+                            self._post_user_message(
+                                thread_id=new_thread_id,
+                                content=content,
+                                images=images,
+                            )
+                            from app.services.agent_store import agent_store as _as
+                            _as.update_agent(agent_id, {
+                                "foundry_agent_id": new_agent.id,
+                                "thread_id": new_thread_id,
+                            })
+                            thread_id = new_thread_id
+                            logger.info("Created fresh thread %s for retry", new_thread_id)
+                        except Exception as thread_err:
+                            logger.warning("Failed to create fresh thread, using existing: %s", thread_err)
+                            from app.services.agent_store import agent_store as _as
+                            _as.update_agent(agent_id, {"foundry_agent_id": new_agent.id})
+
+                        foundry_agent = new_agent
+
+                        # Retry with the fresh agent and thread
                         retry_run = None
+                        logger.info("Retrying run on thread=%s agent=%s", thread_id, new_agent.id)
                         with self.client.runs.stream(
                             thread_id=thread_id,
-                            agent_id=foundry_agent.id,
+                            agent_id=new_agent.id,
                         ) as retry_stream:
                             for event_type, event_data, *_ in retry_stream:
                                 if isinstance(event_data, MessageDeltaChunk):
@@ -2327,6 +2500,24 @@ class AgentService:
                 if cached_imgs:
                     images = [*images, *cached_imgs]
 
+            # If no images provided, re-attach recent images from conversation history
+            if not images:
+                try:
+                    from app.services.message_store import message_store as _ms2
+                    recent_msgs = _ms2.get_messages(thread_id, include_image_only=True)
+                    for msg in reversed(recent_msgs):
+                        msg_images = msg.get("images")
+                        if msg_images and isinstance(msg_images, list):
+                            images = []
+                            for img in msg_images[-3:]:
+                                if img.get("data") and img.get("media_type"):
+                                    images.append({"data": img["data"], "media_type": img["media_type"]})
+                            if images:
+                                logger.info("run_non_streaming: re-attached %d recent image(s)", len(images))
+                            break
+                except Exception:
+                    pass
+
             # Persist user images to Cosmos for reload
             if images:
                 from app.services.message_store import message_store
@@ -2434,9 +2625,53 @@ class AgentService:
                     )
                     time.sleep(2)
                     try:
+                        # Force-recreate the Foundry agent to clear corrupted state
+                        logger.info("run_non_streaming: recreating Foundry agent %s", foundry_agent.id)
+                        try:
+                            self.delete_foundry_agent(foundry_agent.id)
+                        except Exception:
+                            pass
+                        self._foundry_agents.pop(foundry_agent.id, None)
+                        if hasattr(self, "_agent_config_cache"):
+                            self._agent_config_cache.pop(foundry_agent.id, None)
+                        new_agent = self.create_foundry_agent(model, tools or [], custom_instructions)
+                        logger.info("run_non_streaming: recreated Foundry agent -> %s", new_agent.id)
+
+                        # Cancel stuck runs and create fresh thread
+                        try:
+                            runs_list = self.client.runs.list(thread_id=thread_id)
+                            for r in runs_list:
+                                if r.status in ("queued", "in_progress", "requires_action"):
+                                    logger.info("run_non_streaming: cancelling stuck run %s", r.id)
+                                    self.client.runs.cancel(thread_id=thread_id, run_id=r.id)
+                                    for _w in range(10):
+                                        r = self.client.runs.get(thread_id=thread_id, run_id=r.id)
+                                        if r.status in ("cancelled", "failed", "completed", "expired"):
+                                            break
+                                        time.sleep(0.5)
+                        except Exception as ce:
+                            logger.warning("run_non_streaming: cancel stuck runs failed: %s", ce)
+
+                        try:
+                            new_thread_id = self.create_foundry_thread()
+                            self._post_user_message(thread_id=new_thread_id, content=content, images=images)
+                            from app.services.agent_store import agent_store as _as2
+                            _as2.update_agent(agent_id, {
+                                "foundry_agent_id": new_agent.id,
+                                "thread_id": new_thread_id,
+                            })
+                            thread_id = new_thread_id
+                            logger.info("run_non_streaming: fresh thread %s created for retry", new_thread_id)
+                        except Exception as te:
+                            logger.warning("run_non_streaming: fresh thread failed, using existing: %s", te)
+                            from app.services.agent_store import agent_store as _as2
+                            _as2.update_agent(agent_id, {"foundry_agent_id": new_agent.id})
+
+                        foundry_agent = new_agent
+
                         retry_run = self.client.runs.create(
                             thread_id=thread_id,
-                            agent_id=foundry_agent.id,
+                            agent_id=new_agent.id,
                         )
                         for _poll in range(60):
                             if retry_run.status in ("completed", "failed", "cancelled", "expired"):
