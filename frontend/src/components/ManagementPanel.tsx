@@ -476,9 +476,19 @@ function ToolsTab({
   const filteredCatalog = toolSearch
     ? catalog.filter(t => t.label.toLowerCase().includes(searchLower) || t.description.toLowerCase().includes(searchLower) || t.id.toLowerCase().includes(searchLower))
     : catalog;
-  const builtIn = filteredCatalog.filter((t) => !emailToolIds.includes(t.id) && t.category !== "mcp");
-  const emailEntries = filteredCatalog.filter((t) => emailToolIds.includes(t.id));
-  const mcpEntries = filteredCatalog.filter((t) => t.category === "mcp");
+
+  // Group tools by category
+  const CATEGORY_ORDER = ["Finance", "Research", "Communication", "Social", "Automation", "Media", "Cloud", "Utilities", "Agent", "Custom", "MCP Servers"];
+  const grouped = new Map<string, ToolCatalogEntry[]>();
+  for (const tool of filteredCatalog) {
+    const cat = tool.category === "mcp" ? "MCP Servers" : (tool.category || "Other");
+    if (!grouped.has(cat)) grouped.set(cat, []);
+    grouped.get(cat)!.push(tool);
+  }
+  const sortedCategories = [...grouped.keys()].sort(
+    (a, b) => (CATEGORY_ORDER.indexOf(a) === -1 ? 99 : CATEGORY_ORDER.indexOf(a)) - (CATEGORY_ORDER.indexOf(b) === -1 ? 99 : CATEGORY_ORDER.indexOf(b))
+  );
+
   const defaultAccount = emailAccounts.find((a) => a.is_default) ?? emailAccounts[0] ?? null;
 
   if (loading) {
@@ -516,122 +526,93 @@ function ToolsTab({
       </div>
 
       {toolSearch && filteredCatalog.length === 0 && (
-        <p className="text-sm text-[#486d78] text-center py-8">No tools matching "{toolSearch}"</p>
+        <p className="text-sm text-[#486d78] text-center py-8">No tools matching &ldquo;{toolSearch}&rdquo;</p>
       )}
 
-      {/* Built-in tools */}
-      {builtIn.length > 0 && (
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-            {toolSearch ? `Built-in Tools (${builtIn.length})` : "Built-in Tools"}
-          </h3>
-          {!toolSearch && (
-          <div className="flex gap-1.5">
-            <button
-              onClick={() => handleBatchToggle(catalog.filter((t) => !emailToolIds.includes(t.id) && t.category !== "mcp"), true)}
-              disabled={catalog.filter((t) => !emailToolIds.includes(t.id) && t.category !== "mcp").every((t) => t.in_library)}
-              className="px-2 py-0.5 text-[10px] rounded bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              Enable all
-            </button>
-            <button
-              onClick={() => handleBatchToggle(catalog.filter((t) => !emailToolIds.includes(t.id) && t.category !== "mcp"), false)}
-              disabled={catalog.filter((t) => !emailToolIds.includes(t.id) && t.category !== "mcp").every((t) => !t.in_library)}
-              className="px-2 py-0.5 text-[10px] rounded bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              Disable all
-            </button>
-          </div>
-          )}
-        </div>
-        <div className="space-y-1">
-          {builtIn.map((tool) => (
-            <ToolRow
-              key={tool.id}
-              tool={tool}
-              onToggle={() => handleToggle(tool.id, tool.in_library)}
-              onSetup={tool.requires_config && !tool.available ? onSwitchToSettings : undefined}
-            />
-          ))}
-        </div>
-      </div>
-      )}
-
-      {/* Email tools */}
-      {emailEntries.length > 0 && (
-      <div>
-        <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
-          Email Tools
-        </h3>
-        <div className="space-y-1">
-          {emailEntries.map((tool) => (
-            <ToolRow
-              key={tool.id}
-              tool={tool}
-              onToggle={() => handleToggle(tool.id, tool.in_library)}
-            />
-          ))}
-        </div>
-        <div className="mt-3 rounded-lg bg-gray-800/50 border border-gray-700/50 p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {defaultAccount ? (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-green-400" />
-                  <span className="text-xs text-gray-300">
-                    {defaultAccount.label || defaultAccount.from_email}
-                  </span>
-                  {emailAccounts.length > 1 && (
-                    <span className="text-[10px] bg-blue-900/40 text-blue-400 px-1.5 py-0.5 rounded-full">
-                      +{emailAccounts.length - 1} more
-                    </span>
-                  )}
-                  {defaultAccount.imap_host ? (
-                    <span className="text-[10px] bg-green-900/40 text-green-400 px-1.5 py-0.5 rounded-full">
-                      SMTP + IMAP
-                    </span>
-                  ) : (
-                    <span className="text-[10px] bg-yellow-900/40 text-yellow-400 px-1.5 py-0.5 rounded-full">
-                      SMTP only
-                    </span>
-                  )}
-                </>
-              ) : (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-gray-600" />
-                  <span className="text-xs text-gray-500">No email accounts configured</span>
-                </>
+      {/* Category groups */}
+      {sortedCategories.map((category) => {
+        const tools = grouped.get(category) || [];
+        return (
+          <div key={category}>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                {toolSearch ? `${category} (${tools.length})` : category}
+              </h3>
+              {!toolSearch && (
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => handleBatchToggle(tools, true)}
+                    disabled={tools.every((t) => t.in_library)}
+                    className="px-2 py-0.5 text-[10px] rounded bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    Enable all
+                  </button>
+                  <button
+                    onClick={() => handleBatchToggle(tools, false)}
+                    disabled={tools.every((t) => !t.in_library)}
+                    className="px-2 py-0.5 text-[10px] rounded bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    Disable all
+                  </button>
+                </div>
               )}
             </div>
-            <button
-              onClick={onSwitchToEmail}
-              className="px-3 py-1 text-xs rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white transition-colors"
-            >
-              {defaultAccount ? "Manage" : "Set Up"}
-            </button>
-          </div>
-        </div>
-      </div>
-      )}
+            <div className="space-y-1">
+              {tools.map((tool) => (
+                <ToolRow
+                  key={tool.id}
+                  tool={tool}
+                  onToggle={() => handleToggle(tool.id, tool.in_library)}
+                  onSetup={tool.requires_config && !tool.available ? onSwitchToSettings : undefined}
+                />
+              ))}
+            </div>
 
-      {/* MCP Server tools */}
-      {mcpEntries.length > 0 && (
-        <div>
-          <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
-            MCP Servers
-          </h3>
-          <div className="space-y-1">
-            {mcpEntries.map((tool) => (
-              <ToolRow
-                key={tool.id}
-                tool={tool}
-                onToggle={() => handleToggle(tool.id, tool.in_library)}
-              />
-            ))}
+            {/* Email config status for Communication category */}
+            {category === "Communication" && tools.some((t) => emailToolIds.includes(t.id)) && (
+              <div className="mt-3 rounded-lg bg-gray-800/50 border border-gray-700/50 p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {defaultAccount ? (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-green-400" />
+                        <span className="text-xs text-gray-300">
+                          {defaultAccount.label || defaultAccount.from_email}
+                        </span>
+                        {emailAccounts.length > 1 && (
+                          <span className="text-[10px] bg-blue-900/40 text-blue-400 px-1.5 py-0.5 rounded-full">
+                            +{emailAccounts.length - 1} more
+                          </span>
+                        )}
+                        {defaultAccount.imap_host ? (
+                          <span className="text-[10px] bg-green-900/40 text-green-400 px-1.5 py-0.5 rounded-full">
+                            SMTP + IMAP
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-yellow-900/40 text-yellow-400 px-1.5 py-0.5 rounded-full">
+                            SMTP only
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-gray-600" />
+                        <span className="text-xs text-gray-500">No email accounts configured</span>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    onClick={onSwitchToEmail}
+                    className="px-3 py-1 text-xs rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white transition-colors"
+                  >
+                    {defaultAccount ? "Manage" : "Set Up"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })}
 
       {/* Build Your Own Tool */}
       <details className="group mt-2">

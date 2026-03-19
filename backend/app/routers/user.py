@@ -316,14 +316,20 @@ def get_tool_catalog():
             if not _ds_configured():
                 available = False
         elif tool_id == "bluesky":
-            prefs = user_service.get_user("1") or {}
-            bsky_cfg = prefs.get("bluesky_config") or {}
-            if not bsky_cfg.get("handle") or not bsky_cfg.get("app_password"):
+            try:
+                _prefs = user_service._get_user("1")
+                bsky_cfg = (_prefs or {}).get("bluesky_config") or {}
+                if not bsky_cfg.get("handle") or not bsky_cfg.get("app_password"):
+                    available = False
+            except Exception:
                 available = False
         elif tool_id == "x":
-            prefs = user_service.get_user("1") or {}
-            x_cfg = prefs.get("x_config") or {}
-            if not x_cfg.get("bearer_token"):
+            try:
+                _prefs = user_service._get_user("1")
+                x_cfg = (_prefs or {}).get("x_config") or {}
+                if not x_cfg.get("bearer_token"):
+                    available = False
+            except Exception:
                 available = False
 
         entries.append(ToolCatalogEntry(
