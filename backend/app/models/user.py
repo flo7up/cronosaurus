@@ -31,6 +31,10 @@ class SelectedModelRequest(BaseModel):
     model: str
 
 
+class ConfirmationModeRequest(BaseModel):
+    mode: str
+
+
 class ToolPreference(BaseModel):
     """Enabled/disabled state for a single tool."""
     id: str          # e.g. "web_search", "triggers", or an MCP server id
@@ -177,6 +181,7 @@ class DistributionGroupResponse(BaseModel):
 
 class UserPreferencesResponse(BaseModel):
     selected_model: str
+    confirmation_mode: str = "manual"
     mcp_servers: list[MCPServerResponse]
     tool_preferences: list[ToolPreference] = []
     tool_library: list[str] = []

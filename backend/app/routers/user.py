@@ -6,6 +6,7 @@ from app.models.user import (
     MCPServerUpdate,
     MCPServerResponse,
     SelectedModelRequest,
+    ConfirmationModeRequest,
     ToolPreference,
     ToolPreferencesUpdate,
     ToolCatalogEntry,
@@ -42,12 +43,14 @@ def get_preferences():
     """Get user preferences (model + MCP servers + tool toggles + email status + tool library)."""
     _require_ready()
     model = user_service.get_selected_model()
+    confirmation_mode = user_service.get_confirmation_mode()
     servers = user_service.list_mcp_servers()
     tool_prefs = user_service.get_tool_preferences()
     tool_library = user_service.get_tool_library()
     email_accounts = user_service.list_email_accounts_safe()
     return UserPreferencesResponse(
         selected_model=model,
+        confirmation_mode=confirmation_mode,
         mcp_servers=[MCPServerResponse(**s) for s in servers],
         tool_preferences=[ToolPreference(**p) for p in tool_prefs],
         tool_library=tool_library,
@@ -70,6 +73,14 @@ def update_selected_model(body: SelectedModelRequest):
     _require_ready()
     user_service.set_selected_model(body.model)
     return {"selected_model": body.model}
+
+
+@router.put("/preferences/confirmation-mode")
+def update_confirmation_mode(body: ConfirmationModeRequest):
+    """Persist the user's confirmation mode preference."""
+    _require_ready()
+    mode = user_service.set_confirmation_mode(body.mode)
+    return {"confirmation_mode": mode}
 
 
 # ── Notification preferences ────────────────────────────────────

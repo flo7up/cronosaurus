@@ -100,6 +100,7 @@ export interface MCPServer {
 
 export interface UserPreferences {
   selected_model: string;
+  confirmation_mode: "manual" | "auto";
   mcp_servers: MCPServer[];
   tool_preferences: ToolPreference[];
   tool_library: string[];

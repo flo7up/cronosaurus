@@ -296,6 +296,22 @@ def check_busy(agent_id: str):
     return {"busy": busy, "reason": reason}
 
 
+# ── Cancel active runs ───────────────────────────────────────────
+
+@router.post("/{agent_id}/cancel")
+def cancel_runs(agent_id: str):
+    """Cancel all active Foundry runs on the agent's thread."""
+    _require_ready()
+    doc = agent_store.get_agent(agent_id)
+    if not doc:
+        raise HTTPException(404, "Agent not found")
+    thread_id = doc.get("thread_id", "")
+    if not thread_id:
+        return {"cancelled": 0}
+    cancelled = agent_service.cancel_active_runs(thread_id)
+    return {"cancelled": cancelled}
+
+
 # ── Messages ─────────────────────────────────────────────────────
 
 @router.get("/{agent_id}/messages", response_model=list[MessageResponse])

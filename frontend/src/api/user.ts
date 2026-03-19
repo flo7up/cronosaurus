@@ -16,6 +16,14 @@ export async function updateSelectedModel(model: string): Promise<void> {
   });
 }
 
+export async function updateConfirmationMode(mode: "manual" | "auto"): Promise<void> {
+  await fetch(`${BASE}/preferences/confirmation-mode`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode }),
+  });
+}
+
 export async function fetchToolPreferences(): Promise<ToolPreference[]> {
   const res = await fetch(`${BASE}/tools`);
   if (!res.ok) throw new Error("Failed to fetch tool preferences");

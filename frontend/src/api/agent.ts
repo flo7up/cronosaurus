@@ -1,4 +1,4 @@
-import type { Agent, AgentTrigger, Delegation, Message, SSEEvent, ToolStep } from "../types/chat";
+import type { Agent, AgentTrigger, Message, SSEEvent, ToolStep } from "../types/chat";
 
 const BASE = "/api/agents";
 
@@ -193,6 +193,16 @@ export async function sendMessageStream(
         }
       }
     }
+  }
+}
+
+// ── Cancel active runs ─────────────────────────────────────────
+
+export async function cancelAgentRuns(agentId: string): Promise<void> {
+  try {
+    await fetch(`${BASE}/${agentId}/cancel`, { method: "POST" });
+  } catch {
+    // best-effort
   }
 }
 

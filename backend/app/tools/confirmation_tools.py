@@ -3,7 +3,7 @@ Confirmation tool — lets the agent request explicit user confirmation
 before executing a significant action.
 
 The frontend detects this tool in the message's tool steps and renders
-interactive Confirm / Reject buttons.
+an interactive confirmation dialog.
 """
 
 import json
@@ -14,8 +14,8 @@ CONFIRMATION_TOOL_DEFINITIONS = [
         "name": "request_confirmation",
         "description": (
             "Ask the user to confirm or reject a proposed action before you "
-            "execute it. The user will see interactive Confirm and Reject "
-            "buttons. Call this BEFORE executing any significant action "
+            "execute it. The user will see an interactive confirmation "
+            "dialog. Call this BEFORE executing any significant action "
             "(creating triggers, sending emails, making changes). "
             "After calling this, state what you plan to do and STOP. "
             "Wait for the user to respond before proceeding."
@@ -43,7 +43,7 @@ def execute_confirmation_tool(tool_name: str, arguments: str | dict) -> dict[str
     """Handle the confirmation tool call.
 
     This is a no-op — it simply acknowledges that the confirmation UI
-    has been presented.  The real confirmation comes from the user's
+    has been presented. The real confirmation comes from the user's
     next message (button click or typed yes/no).
     """
     if isinstance(arguments, str):

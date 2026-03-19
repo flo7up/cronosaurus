@@ -111,15 +111,22 @@ class UserService:
         """Return the user doc, creating a blank one if it doesn't exist."""
         try:
             doc = self._container.read_item(user_id, partition_key=user_id)
+            needs_update = False
             # Ensure triggers field exists (migration for existing docs)
             if "triggers" not in doc:
                 doc["triggers"] = []
+                needs_update = True
+            if "confirmation_mode" not in doc:
+                doc["confirmation_mode"] = "manual"
+                needs_update = True
+            if needs_update:
                 self._upsert_user(doc)
             return doc
         except CosmosResourceNotFoundError:
             doc = {
                 "id": user_id,
                 "selected_model": "gpt-4.1-mini",
+                "confirmation_mode": "manual",
                 "mcp_servers": [],
                 "triggers": [],
             }
@@ -145,6 +152,18 @@ class UserService:
         self._upsert_user(doc)
         logger.info("User %s model set to %s", user_id, model)
         return model
+
+    def get_confirmation_mode(self, user_id: str = DEFAULT_USER_ID) -> str:
+        doc = self._get_user(user_id)
+        return "auto" if doc.get("confirmation_mode") == "auto" else "manual"
+
+    def set_confirmation_mode(self, mode: str, user_id: str = DEFAULT_USER_ID) -> str:
+        normalized = "auto" if str(mode).strip().lower() == "auto" else "manual"
+        doc = self._get_user(user_id)
+        doc["confirmation_mode"] = normalized
+        self._upsert_user(doc)
+        logger.info("User %s confirmation mode set to %s", user_id, normalized)
+        return normalized
 
     # ── Tool preferences ─────────────────────────────────────────────
 

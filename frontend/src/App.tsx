@@ -25,6 +25,7 @@ import {
 import {
   fetchPreferences,
   updateSelectedModel,
+  updateConfirmationMode,
   fetchMCPServers,
   createMCPServer,
   updateMCPServer,
@@ -76,6 +77,7 @@ function App() {
   const [serviceReady, setServiceReady] = useState<boolean | null>(null);
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState("gpt-4.1-mini");
+  const [confirmationMode, setConfirmationMode] = useState<"manual" | "auto">("manual");
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
   const [showManagement, setShowManagement] = useState(false);
   const [managementTab, setManagementTab] = useState<"tools" | "triggers" | "email" | "mcp" | "notifications" | "appearance" | "settings">("tools");
@@ -137,6 +139,7 @@ function App() {
       fetchModels().then((m) => { if (m.length > 0) setModels(m); }).catch(() => {});
       fetchPreferences().then((p) => {
         if (p.selected_model) setSelectedModel(p.selected_model);
+        setConfirmationMode(p.confirmation_mode === "auto" ? "auto" : "manual");
         if (p.tool_library && p.tool_library.length > 0) setToolLibrary(p.tool_library);
       }).catch(() => {});
       fetchMCPServers().then(setMcpServers).catch(() => {});
@@ -233,6 +236,8 @@ function App() {
         controller.abort();
         delete abortControllersRef.current[agentId];
       }
+      // Cancel any active Foundry runs so the thread isn't stuck
+      import("./api/agent").then((m) => m.cancelAgentRuns(agentId)).catch(() => {});
 
       const state = streamingStatesRef.current[agentId];
       if (commitPartial && state) {
@@ -353,16 +358,6 @@ function App() {
       console.error(e);
     }
   }, [selectedModel]);
-
-  const handleUpdateRole = useCallback(async (role: "agent" | "master") => {
-    if (!activeId) return;
-    try {
-      const updated = await updateAgent(activeId, { role } as any);
-      setAgents((prev) => prev.map((a) => (a.id === activeId ? updated : a)));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [activeId]);
 
   const handleUpdateManagedBy = useCallback(async (masterId: string | null) => {
     if (!activeId) return;
@@ -617,6 +612,19 @@ function App() {
       }
     },
     [activeId]
+  );
+
+  const handleConfirmationModeChange = useCallback(
+    async (mode: "manual" | "auto") => {
+      const previous = confirmationMode;
+      setConfirmationMode(mode);
+      try {
+        await updateConfirmationMode(mode);
+      } catch {
+        setConfirmationMode(previous);
+      }
+    },
+    [confirmationMode]
   );
 
   const handleRenameAgent = useCallback(
@@ -924,7 +932,9 @@ function App() {
         onNewAgent={handleNewAgent}
         models={models}
         selectedModel={selectedModel}
+        confirmationMode={confirmationMode}
         onModelChange={handleModelChange}
+        onConfirmationModeChange={handleConfirmationModeChange}
         onOpenManagement={(tab) => { setManagementTab(tab as "tools" | "triggers" | "email" | "mcp" | "notifications" | "appearance" | "settings"); setShowManagement(true); }}
         onRenameAgent={handleRenameAgent}
         onToolsChange={handleToolsChange}
@@ -942,7 +952,6 @@ function App() {
         onOpenNotifications={() => setShowNotifications(true)}
         unreadNotifications={unreadNotifications}
         allAgents={agents}
-        onUpdateRole={handleUpdateRole}
         onUpdateManagedBy={handleUpdateManagedBy}
       />
       {showManagement && (

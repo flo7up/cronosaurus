@@ -17,6 +17,169 @@ function Tooltip({ text, children }: { text?: string; children: ReactNode }) {
   );
 }
 
+type ConfirmationMode = "manual" | "auto";
+
+type PendingConfirmation = {
+  key: string;
+  message: string;
+};
+
+function ConfirmationModeMenu({
+  mode,
+  onChange,
+}: {
+  mode: ConfirmationMode;
+  onChange: (mode: ConfirmationMode) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  const options: Array<{
+    id: ConfirmationMode;
+    title: string;
+    description: string;
+    icon: ReactNode;
+  }> = [
+    {
+      id: "manual",
+      title: "Manual Confirm",
+      description: "Show a confirmation dialog whenever an agent asks for approval.",
+      icon: (
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 3l7 3v5c0 5.25-3.438 8.813-7 10-3.562-1.187-7-4.75-7-10V6l7-3z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9.75 12.25l1.5 1.5 3-3.5" />
+        </svg>
+      ),
+    },
+    {
+      id: "auto",
+      title: "Auto Confirm",
+      description: "Approve confirmation requests immediately and continue without prompting.",
+      icon: (
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M13.5 4.5L21 12l-7.5 7.5M3 12h17.25" />
+        </svg>
+      ),
+    },
+  ];
+
+  const current = options.find((option) => option.id === mode) ?? options[0];
+
+  return (
+    <div ref={containerRef} className="relative hidden sm:block">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="terminal-control flex items-center gap-2 px-2.5 py-1.5 text-left text-[10px] text-[#78adb8] transition-colors hover:text-[#b0f0e8] hover:bg-[#0d1318]"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={current.description}
+      >
+        <span className="flex h-6 w-6 items-center justify-center rounded border border-[#3dd8c5]/12 bg-[#0c1218] text-[#8adcca]">
+          {current.icon}
+        </span>
+        <span className="min-w-0">
+          <span className="block whitespace-nowrap text-[9px] uppercase tracking-[0.16em] text-[#597f8b]">Approvals</span>
+          <span className="block whitespace-nowrap text-[11px] text-[#c9f6ef]">{current.title}</span>
+        </span>
+        <svg className={`h-3.5 w-3.5 text-[#597f8b] transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-[65] mt-2 w-[22rem] overflow-hidden rounded-[22px] border border-[#70684b] bg-[#171614] shadow-[0_18px_40px_rgba(0,0,0,0.48)]">
+          <div className="p-2">
+            {options.map((option) => {
+              const selected = option.id === mode;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => {
+                    onChange(option.id);
+                    setOpen(false);
+                  }}
+                  className={`mb-1.5 flex w-full items-start gap-3 rounded-[18px] border px-3 py-3 text-left transition-colors last:mb-0 ${
+                    selected
+                      ? "border-[#5d6d5f] bg-[#2a2d2c] text-[#f1ead3]"
+                      : "border-transparent bg-transparent text-[#d4d0c8] hover:border-[#3f433f] hover:bg-[#212321]"
+                  }`}
+                  role="menuitemradio"
+                  aria-checked={selected}
+                >
+                  <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${
+                    selected
+                      ? "border-[#8aa087]/35 bg-[#1c201f] text-[#d8e7d2]"
+                      : "border-[#4a4c48] bg-[#181917] text-[#9aa39b]"
+                  }`}>
+                    {option.icon}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[15px] leading-5">{option.title}</span>
+                    <span className="mt-1 block text-[12px] leading-5 text-[#8f928b]">{option.description}</span>
+                  </span>
+                  {selected && (
+                    <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#d1b300]" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function readConfirmationText(source?: Record<string, unknown>): string | null {
+  const value = source?.message;
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function getPendingConfirmation(agentId: string | null, messages: Message[]): PendingConfirmation | null {
+  if (!agentId || messages.length === 0) return null;
+  const last = messages[messages.length - 1];
+  if (last.role !== "assistant") return null;
+
+  const step = [...(last.toolSteps ?? [])]
+    .reverse()
+    .find((candidate) => candidate.name === "request_confirmation");
+
+  if (!step) return null;
+
+  const message =
+    readConfirmationText(step.result) ??
+    readConfirmationText(step.arguments) ??
+    (last.content.trim() || "Please confirm this action.");
+
+  return {
+    key: `${agentId}:${last.created_at || "pending"}:${message}`,
+    message,
+  };
+}
+
 interface ChatViewProps {
   messages: Message[];
   messagesLoading: boolean;
@@ -33,7 +196,9 @@ interface ChatViewProps {
   onNewAgent: () => void;
   models: string[];
   selectedModel: string;
+  confirmationMode: ConfirmationMode;
   onModelChange: (model: string) => void;
+  onConfirmationModeChange: (mode: ConfirmationMode) => void;
   onOpenManagement: (tab: string) => void;
   onRenameAgent: (name: string) => void;
   onToolsChange: (tools: string[]) => void;
@@ -51,7 +216,6 @@ interface ChatViewProps {
   onOpenNotifications: () => void;
   unreadNotifications: number;
   allAgents: Agent[];
-  onUpdateRole: (role: "agent" | "master") => void;
   onUpdateManagedBy: (masterId: string | null) => void;
 }
 
@@ -71,7 +235,9 @@ export default function ChatView({
   onNewAgent,
   models,
   selectedModel,
+  confirmationMode,
   onModelChange,
+  onConfirmationModeChange,
   onOpenManagement,
   onRenameAgent,
   onToolsChange,
@@ -89,7 +255,6 @@ export default function ChatView({
   onOpenNotifications,
   unreadNotifications,
   allAgents,
-  onUpdateRole,
   onUpdateManagedBy,
 }: ChatViewProps) {
   const [input, setInput] = useState("");
@@ -99,9 +264,16 @@ export default function ChatView({
   const [instructionsDraft, setInstructionsDraft] = useState("");
   const [showApiDialog, setShowApiDialog] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<{ src: string } | null>(null);
+  const [confirmationDialog, setConfirmationDialog] = useState<PendingConfirmation | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const autoConfirmedKeyRef = useRef<string | null>(null);
+
+  const pendingConfirmation = useMemo(
+    () => getPendingConfirmation(activeAgent?.id ?? null, messages),
+    [activeAgent?.id, messages]
+  );
 
   // Auto-scroll
   useEffect(() => {
@@ -154,6 +326,25 @@ export default function ChatView({
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
   }, [activeAgent?.id]);
+
+  useEffect(() => {
+    if (!pendingConfirmation) {
+      setConfirmationDialog(null);
+      autoConfirmedKeyRef.current = null;
+      return;
+    }
+
+    if (confirmationMode === "auto") {
+      setConfirmationDialog(null);
+      if (autoConfirmedKeyRef.current === pendingConfirmation.key) return;
+      autoConfirmedKeyRef.current = pendingConfirmation.key;
+      onSend("yes");
+      return;
+    }
+
+    autoConfirmedKeyRef.current = null;
+    setConfirmationDialog(pendingConfirmation);
+  }, [confirmationMode, onSend, pendingConfirmation]);
 
   const handleSubmit = () => {
     const trimmed = input.trim();
@@ -497,6 +688,7 @@ export default function ChatView({
             </svg>
           </button>
         </Tooltip>
+        <ConfirmationModeMenu mode={confirmationMode} onChange={onConfirmationModeChange} />
         {serviceReady === false && (
           <span className="ml-auto flex items-center gap-1.5 terminal-chip px-2 py-1 text-[10px] text-amber-400 border-amber-500/25">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
@@ -556,35 +748,6 @@ export default function ChatView({
           {messages.map((msg, i) => (
             <MessageBubble key={i} message={msg} onImageClick={(src) => setLightboxImage({ src })} />
           ))}
-
-          {/* Confirmation buttons — shown when the last assistant message used request_confirmation */}
-          {!isStreaming && messages.length > 0 && (() => {
-            const last = messages[messages.length - 1];
-            if (last.role !== "assistant") return null;
-            if (!last.toolSteps?.some(s => s.name === "request_confirmation")) return null;
-            return (
-              <div className="flex gap-3 ml-10">
-                <button
-                  onClick={() => onSend("yes")}
-                  className="terminal-control border-lime-300/20 bg-[#0f1812] px-4 py-2 text-[#97ff8a] text-sm font-medium transition-colors flex items-center gap-1.5"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  approve
-                </button>
-                <button
-                  onClick={() => onSend("no")}
-                  className="terminal-control px-4 py-2 text-[#8adcca] text-sm font-medium transition-colors flex items-center gap-1.5"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  reject
-                </button>
-              </div>
-            );
-          })()}
 
           {/* Streaming tool steps + assistant message */}
           {isStreaming && (streamingToolSteps.length > 0 || streamingContent || streamingTodos.length > 0 || streamingImages.length > 0) && (
@@ -843,6 +1006,56 @@ export default function ChatView({
                   className="brand-button-primary px-4 py-1.5 text-xs font-medium"
                 >
                   Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation dialog */}
+      {confirmationDialog && confirmationMode === "manual" && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70">
+          <div className="terminal-panel mx-4 overflow-hidden" style={{ width: 540, maxWidth: "92vw" }}>
+            <div className="terminal-titlebar">
+              <span>confirmation required</span>
+            </div>
+            <div className="space-y-4 p-4">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-amber-400/20 bg-amber-900/25 text-amber-300">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3.75m0 3h.008v.008H12v-.008zm9-3.008c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="terminal-chip border-amber-400/20 bg-amber-900/20 px-2 py-1 text-[10px] text-amber-300">manual confirm</span>
+                    {activeAgent && <span className="text-[11px] text-[#597f8b]">{activeAgent.name}</span>}
+                  </div>
+                  <p className="text-xs text-[#597f8b]">The agent wants approval before continuing.</p>
+                  <div className="rounded border border-[#3d3520] bg-[#0d0b08] px-3 py-3 text-sm leading-relaxed text-[#e0f5d0]">
+                    {confirmationDialog.message}
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setConfirmationDialog(null);
+                    onSend("no");
+                  }}
+                  className="terminal-control px-4 py-2 text-sm font-medium text-[#8adcca] transition-colors"
+                >
+                  Reject
+                </button>
+                <button
+                  onClick={() => {
+                    setConfirmationDialog(null);
+                    onSend("yes");
+                  }}
+                  className="brand-button-primary px-4 py-2 text-sm font-semibold"
+                >
+                  Confirm
                 </button>
               </div>
             </div>
