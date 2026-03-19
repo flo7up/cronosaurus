@@ -315,6 +315,16 @@ def get_tool_catalog():
             from app.tools.deep_search_tools import is_configured as _ds_configured
             if not _ds_configured():
                 available = False
+        elif tool_id == "bluesky":
+            prefs = user_service.get_user("1") or {}
+            bsky_cfg = prefs.get("bluesky_config") or {}
+            if not bsky_cfg.get("handle") or not bsky_cfg.get("app_password"):
+                available = False
+        elif tool_id == "x":
+            prefs = user_service.get_user("1") or {}
+            x_cfg = prefs.get("x_config") or {}
+            if not x_cfg.get("bearer_token"):
+                available = False
 
         entries.append(ToolCatalogEntry(
             id=tool_id,
