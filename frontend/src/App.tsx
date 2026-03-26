@@ -77,7 +77,7 @@ function App() {
   const [serviceReady, setServiceReady] = useState<boolean | null>(null);
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState("gpt-4.1-mini");
-  const [confirmationMode, setConfirmationMode] = useState<"manual" | "auto">("manual");
+  const [confirmationMode, setConfirmationMode] = useState<"manual" | "auto" | "delayed_auto">("manual");
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
   const [showManagement, setShowManagement] = useState(false);
   const [managementTab, setManagementTab] = useState<"tools" | "triggers" | "email" | "mcp" | "notifications" | "appearance" | "settings">("tools");
@@ -139,7 +139,8 @@ function App() {
       fetchModels().then((m) => { if (m.length > 0) setModels(m); }).catch(() => {});
       fetchPreferences().then((p) => {
         if (p.selected_model) setSelectedModel(p.selected_model);
-        setConfirmationMode(p.confirmation_mode === "auto" ? "auto" : "manual");
+        const mode = p.confirmation_mode;
+        setConfirmationMode(mode === "auto" || mode === "delayed_auto" ? mode : "manual");
         if (p.tool_library && p.tool_library.length > 0) setToolLibrary(p.tool_library);
       }).catch(() => {});
       fetchMCPServers().then(setMcpServers).catch(() => {});
@@ -615,7 +616,7 @@ function App() {
   );
 
   const handleConfirmationModeChange = useCallback(
-    async (mode: "manual" | "auto") => {
+    async (mode: "manual" | "auto" | "delayed_auto") => {
       const previous = confirmationMode;
       setConfirmationMode(mode);
       try {

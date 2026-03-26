@@ -17,7 +17,7 @@ function Tooltip({ text, children }: { text?: string; children: ReactNode }) {
   );
 }
 
-type ConfirmationMode = "manual" | "auto";
+type ConfirmationMode = "manual" | "auto" | "delayed_auto";
 
 type PendingConfirmation = {
   key: string;
@@ -69,6 +69,17 @@ function ConfirmationModeMenu({
         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 3l7 3v5c0 5.25-3.438 8.813-7 10-3.562-1.187-7-4.75-7-10V6l7-3z" />
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9.75 12.25l1.5 1.5 3-3.5" />
+        </svg>
+      ),
+    },
+    {
+      id: "delayed_auto",
+      title: "Delayed Auto",
+      description: "Show confirmation with a 15-second countdown. Auto-approves if you don\u2019t respond.",
+      icon: (
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 6v6l4 2" />
+          <circle cx="12" cy="12" r="9" strokeWidth={1.7} />
         </svg>
       ),
     },
@@ -269,6 +280,15 @@ export default function ChatView({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const autoConfirmedKeyRef = useRef<string | null>(null);
+  const delayedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [delayedCountdown, setDelayedCountdown] = useState<number>(0);
+
+  // Clean up delayed timer on unmount
+  useEffect(() => {
+    return () => {
+      if (delayedTimerRef.current) clearInterval(delayedTimerRef.current);
+    };
+  }, []);
 
   const pendingConfirmation = useMemo(
     () => getPendingConfirmation(activeAgent?.id ?? null, messages),
@@ -331,6 +351,8 @@ export default function ChatView({
     if (!pendingConfirmation) {
       setConfirmationDialog(null);
       autoConfirmedKeyRef.current = null;
+      if (delayedTimerRef.current) { clearInterval(delayedTimerRef.current); delayedTimerRef.current = null; }
+      setDelayedCountdown(0);
       return;
     }
 
@@ -339,6 +361,26 @@ export default function ChatView({
       if (autoConfirmedKeyRef.current === pendingConfirmation.key) return;
       autoConfirmedKeyRef.current = pendingConfirmation.key;
       onSend("yes");
+      return;
+    }
+
+    if (confirmationMode === "delayed_auto") {
+      if (autoConfirmedKeyRef.current === pendingConfirmation.key) return;
+      setConfirmationDialog(pendingConfirmation);
+      setDelayedCountdown(15);
+      if (delayedTimerRef.current) clearInterval(delayedTimerRef.current);
+      delayedTimerRef.current = setInterval(() => {
+        setDelayedCountdown((prev) => {
+          if (prev <= 1) {
+            if (delayedTimerRef.current) { clearInterval(delayedTimerRef.current); delayedTimerRef.current = null; }
+            autoConfirmedKeyRef.current = pendingConfirmation.key;
+            setConfirmationDialog(null);
+            onSend("yes");
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
       return;
     }
 
@@ -1014,7 +1056,7 @@ export default function ChatView({
       )}
 
       {/* Confirmation dialog */}
-      {confirmationDialog && confirmationMode === "manual" && (
+      {confirmationDialog && (confirmationMode === "manual" || confirmationMode === "delayed_auto") && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70">
           <div className="terminal-panel mx-4 overflow-hidden" style={{ width: 540, maxWidth: "92vw" }}>
             <div className="terminal-titlebar">
@@ -1029,34 +1071,74 @@ export default function ChatView({
                 </div>
                 <div className="min-w-0 flex-1 space-y-2">
                   <div className="flex items-center gap-2">
-                    <span className="terminal-chip border-amber-400/20 bg-amber-900/20 px-2 py-1 text-[10px] text-amber-300">manual confirm</span>
+                    <span className={`terminal-chip px-2 py-1 text-[10px] ${
+                      confirmationMode === "delayed_auto"
+                        ? "border-blue-400/20 bg-blue-900/20 text-blue-300"
+                        : "border-amber-400/20 bg-amber-900/20 text-amber-300"
+                    }`}>
+                      {confirmationMode === "delayed_auto" ? "delayed auto" : "manual confirm"}
+                    </span>
                     {activeAgent && <span className="text-[11px] text-[#597f8b]">{activeAgent.name}</span>}
                   </div>
-                  <p className="text-xs text-[#597f8b]">The agent wants approval before continuing.</p>
+                  <p className="text-xs text-[#597f8b]">
+                    {confirmationMode === "delayed_auto"
+                      ? "The agent wants approval. Auto-approving if no response."
+                      : "The agent wants approval before continuing."}
+                  </p>
                   <div className="rounded border border-[#3d3520] bg-[#0d0b08] px-3 py-3 text-sm leading-relaxed text-[#e0f5d0]">
                     {confirmationDialog.message}
                   </div>
                 </div>
               </div>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => {
-                    setConfirmationDialog(null);
-                    onSend("no");
-                  }}
-                  className="terminal-control px-4 py-2 text-sm font-medium text-[#8adcca] transition-colors"
-                >
-                  Reject
-                </button>
-                <button
-                  onClick={() => {
-                    setConfirmationDialog(null);
-                    onSend("yes");
-                  }}
-                  className="brand-button-primary px-4 py-2 text-sm font-semibold"
-                >
-                  Confirm
-                </button>
+              <div className="flex items-center justify-between">
+                {/* Countdown timer for delayed_auto */}
+                {confirmationMode === "delayed_auto" && delayedCountdown > 0 ? (
+                  <div className="flex items-center gap-2">
+                    <div className="relative h-6 w-6">
+                      <svg className="h-6 w-6 -rotate-90" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" fill="none" stroke="#1e293b" strokeWidth="2" />
+                        <circle
+                          cx="12" cy="12" r="10" fill="none"
+                          stroke="#3b82f6" strokeWidth="2"
+                          strokeDasharray={`${(delayedCountdown / 15) * 62.83} 62.83`}
+                          strokeLinecap="round"
+                          className="transition-all duration-1000 ease-linear"
+                        />
+                      </svg>
+                    </div>
+                    <span className="text-xs text-blue-400 tabular-nums font-mono">
+                      {delayedCountdown}s
+                    </span>
+                  </div>
+                ) : (
+                  <div />
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (delayedTimerRef.current) { clearInterval(delayedTimerRef.current); delayedTimerRef.current = null; }
+                      setDelayedCountdown(0);
+                      autoConfirmedKeyRef.current = pendingConfirmation?.key ?? null;
+                      setConfirmationDialog(null);
+                      onSend("no");
+                    }}
+                    className="terminal-control px-4 py-2 text-sm font-medium text-[#8adcca] transition-colors"
+                  >
+                    Reject
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (delayedTimerRef.current) { clearInterval(delayedTimerRef.current); delayedTimerRef.current = null; }
+                      setDelayedCountdown(0);
+                      autoConfirmedKeyRef.current = pendingConfirmation?.key ?? null;
+                      setConfirmationDialog(null);
+                      onSend("yes");
+                    }}
+                    className="brand-button-primary px-4 py-2 text-sm font-semibold"
+                  >
+                    Confirm
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1555,7 +1637,7 @@ function ToolsDropdown({
                       <span className={`shrink-0 ${enabled ? "text-[#97ff8a]" : "text-[#486d78]"}`}>{tool.icon}</span>
                       <div className="flex-1 text-left min-w-0">
                         <div className={`text-sm ${enabled ? "text-[#c9f6ef]" : "text-[#649b8f]"}`}>{tool.label}</div>
-                        <div className="text-xs text-[#426d6d] truncate">
+                        <div className="text-xs text-[#426d6d]">
                           {isEmailTool && activeAccount
                             ? activeAccount.from_email || activeAccount.label
                             : tool.description}

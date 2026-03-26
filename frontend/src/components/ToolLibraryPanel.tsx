@@ -135,10 +135,10 @@ export default function ToolLibraryPanel({
     : catalog;
 
   // Group tools by category, preserving a defined order
-  const CATEGORY_ORDER = ["Finance", "Research", "Communication", "Social", "Automation", "Media", "Cloud", "Utilities", "Agent", "Custom", "MCP Servers"];
+  const CATEGORY_ORDER = ["Finance", "Research", "Communication", "Social", "Automation", "Media", "Cloud", "Utilities", "Agent", "Agent Created", "Custom", "MCP Servers"];
   const grouped = new Map<string, ToolCatalogEntry[]>();
   for (const tool of filtered) {
-    const cat = tool.category === "mcp" ? "MCP Servers" : (tool.category || "Other");
+    const cat = tool.category === "mcp" ? "MCP Servers" : tool.category === "agent_created" ? "Agent Created" : (tool.category || "Other");
     if (!grouped.has(cat)) grouped.set(cat, []);
     grouped.get(cat)!.push(tool);
   }

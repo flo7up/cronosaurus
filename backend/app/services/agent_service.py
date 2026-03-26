@@ -134,6 +134,14 @@ from app.tools.orchestration_tools import (
     SUB_AGENT_INSTRUCTIONS_SUFFIX,
     execute_orchestration_tool,
 )
+from app.tools.self_extension_tools import (
+    SELF_EXTENSION_TOOL_DEFINITIONS,
+    SELF_EXTENSION_TOOL_NAMES,
+    SELF_EXTENSION_INSTRUCTIONS_SUFFIX,
+    execute_self_extension_tool,
+    execute_generated_tool,
+    load_all_generated_tools,
+)
 from app.services import mcp_client
 
 logger = logging.getLogger(__name__)
@@ -301,6 +309,7 @@ TOOL_CATALOG: dict[str, list[dict]] = {
     "bluesky": BLUESKY_TOOL_DEFINITIONS,
     "x": X_TOOL_DEFINITIONS,
     "orchestration": ORCHESTRATION_TOOL_DEFINITIONS,
+    "self_extension": SELF_EXTENSION_TOOL_DEFINITIONS,
 }
 
 # Metadata for the tool catalog API (label, description, category)
@@ -432,6 +441,12 @@ TOOL_CATALOG_META: dict[str, dict] = {
         "requires_config": False,
         "provider_only": "azure_foundry",
     },
+    "self_extension": {
+        "label": "Self-Extension",
+        "description": "Let the agent create its own tools at runtime when it detects a missing capability. Agent-created tools are sandboxed and can be reviewed, deactivated, or deleted by the user.",
+        "category": "Agent",
+        "requires_config": False,
+    },
 }
 
 TOOL_NAME_MAP: dict[str, str] = {}
@@ -483,6 +498,20 @@ def _load_custom_tools():
             logger.exception("Failed to load custom tool %s", path.name)
 
 _load_custom_tools()
+
+
+# ── Load agent-generated tools from persistent store ────────────
+
+def _init_generated_tools():
+    """Initialize the generated tool store and load saved tools."""
+    try:
+        from app.services.generated_tool_store import generated_tool_store
+        generated_tool_store.initialize()
+        load_all_generated_tools()
+    except Exception:
+        logger.exception("Failed to load generated tools from store")
+
+_init_generated_tools()
 
 
 TRIGGER_INSTRUCTIONS_SUFFIX = """
@@ -1101,6 +1130,8 @@ class AgentService:
             instructions += SCREENSHOT_INSTRUCTIONS_SUFFIX
         if "tool_management" in tool_ids:
             instructions += TOOL_MANAGEMENT_INSTRUCTIONS_SUFFIX
+        if "self_extension" in tool_ids:
+            instructions += SELF_EXTENSION_INSTRUCTIONS_SUFFIX
         if "deep_search" in tool_ids:
             instructions += DEEP_SEARCH_INSTRUCTIONS_SUFFIX
 
@@ -1695,6 +1726,10 @@ class AgentService:
             return execute_orchestration_tool(
                 tool_name=fn_name, arguments=fn_args, agent_id=agent_id,
             )
+        elif fn_name in SELF_EXTENSION_TOOL_NAMES:
+            return execute_self_extension_tool(
+                tool_name=fn_name, arguments=fn_args, agent_id=agent_id,
+            )
         elif fn_name.startswith("mcp_"):
             return self._execute_mcp_tool(fn_name, fn_args)
         else:
@@ -1709,6 +1744,18 @@ class AgentService:
                     thread_id=thread_id,
                     model=model,
                 )
+            # Check agent-generated tools
+            if cat:
+                meta = TOOL_CATALOG_META.get(cat, {})
+                if meta.get("agent_created"):
+                    return execute_generated_tool(
+                        tool_name=fn_name,
+                        arguments=fn_args,
+                        tool_id=cat,
+                        agent_id=agent_id,
+                        thread_id=thread_id,
+                        model=model,
+                    )
             return {"error": f"Unknown tool: {fn_name}"}
 
     def _execute_mcp_tool(self, fn_name: str, fn_args: str | dict) -> dict:

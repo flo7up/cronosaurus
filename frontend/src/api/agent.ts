@@ -1,4 +1,4 @@
-import type { Agent, AgentTrigger, Message, SSEEvent, ToolStep } from "../types/chat";
+import type { Agent, AgentTrigger, Message, SSEEvent, ToolStep, GeneratedTool } from "../types/chat";
 
 const BASE = "/api/agents";
 
@@ -352,4 +352,38 @@ export async function fetchActiveDelegationAgents(): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+// ── Agent-created tools ─────────────────────────────────────────
+
+export async function fetchGeneratedTools(): Promise<GeneratedTool[]> {
+  const res = await fetch(`${BASE}/generated-tools/list`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function getGeneratedTool(docId: string): Promise<GeneratedTool> {
+  const res = await fetch(`${BASE}/generated-tools/${docId}`);
+  if (!res.ok) throw new Error("Failed to fetch generated tool");
+  return res.json();
+}
+
+export async function toggleGeneratedTool(
+  docId: string,
+  active: boolean
+): Promise<{ success: boolean; active: boolean }> {
+  const res = await fetch(`${BASE}/generated-tools/${docId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ active }),
+  });
+  if (!res.ok) throw new Error("Failed to toggle generated tool");
+  return res.json();
+}
+
+export async function deleteGeneratedTool(docId: string): Promise<void> {
+  const res = await fetch(`${BASE}/generated-tools/${docId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to delete generated tool");
 }

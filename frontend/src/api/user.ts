@@ -16,7 +16,7 @@ export async function updateSelectedModel(model: string): Promise<void> {
   });
 }
 
-export async function updateConfirmationMode(mode: "manual" | "auto"): Promise<void> {
+export async function updateConfirmationMode(mode: "manual" | "auto" | "delayed_auto"): Promise<void> {
   await fetch(`${BASE}/preferences/confirmation-mode`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },

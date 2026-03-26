@@ -9,7 +9,8 @@ import type {
   AppSettings,
 } from "../types/chat";
 import { fetchToolCatalog, updateToolLibrary, batchUpdateToolLibrary } from "../api/user";
-import { updateAgentTrigger, testAgentTrigger } from "../api/agent";
+import { updateAgentTrigger, testAgentTrigger, fetchGeneratedTools, toggleGeneratedTool, deleteGeneratedTool, getGeneratedTool } from "../api/agent";
+import type { GeneratedTool } from "../types/chat";
 import { fetchSettings, updateSettings, testFoundryConnection, testCosmosConnection, fetchDeployments, fetchProviderModels } from "../api/settings";
 import type { FoundryDeployment } from "../api/settings";
 import type { NotificationChannel, DistributionGroup } from "../api/notification";
@@ -418,12 +419,17 @@ function ToolsTab({
 }) {
   const [catalog, setCatalog] = useState<ToolCatalogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generatedTools, setGeneratedTools] = useState<GeneratedTool[]>([]);
+  const [expandedGenTool, setExpandedGenTool] = useState<string | null>(null);
+  const [genToolCode, setGenToolCode] = useState<{ id: string; code: string } | null>(null);
+  const [confirmDeleteGen, setConfirmDeleteGen] = useState<string | null>(null);
 
   useEffect(() => {
     fetchToolCatalog()
       .then(setCatalog)
       .catch(() => {})
       .finally(() => setLoading(false));
+    fetchGeneratedTools().then(setGeneratedTools).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -478,10 +484,10 @@ function ToolsTab({
     : catalog;
 
   // Group tools by category
-  const CATEGORY_ORDER = ["Finance", "Research", "Communication", "Social", "Automation", "Media", "Cloud", "Utilities", "Agent", "Custom", "MCP Servers"];
+  const CATEGORY_ORDER = ["Finance", "Research", "Communication", "Social", "Automation", "Media", "Cloud", "Utilities", "Agent", "Agent Created", "Custom", "MCP Servers"];
   const grouped = new Map<string, ToolCatalogEntry[]>();
   for (const tool of filteredCatalog) {
-    const cat = tool.category === "mcp" ? "MCP Servers" : (tool.category || "Other");
+    const cat = tool.category === "mcp" ? "MCP Servers" : tool.category === "agent_created" ? "Agent Created" : (tool.category || "Other");
     if (!grouped.has(cat)) grouped.set(cat, []);
     grouped.get(cat)!.push(tool);
   }
@@ -613,6 +619,99 @@ function ToolsTab({
           </div>
         );
       })}
+
+      {/* Agent-Created Tools Management */}
+      {generatedTools.length > 0 && (
+        <div className="mt-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+              <span>🤖</span> Agent-Created Tools
+              <span className="text-[10px] bg-amber-900/40 text-amber-400 px-1.5 py-0.5 rounded-full">
+                {generatedTools.length}
+              </span>
+            </h3>
+          </div>
+          <div className="space-y-2">
+            {generatedTools.map((gt) => (
+              <div key={gt.id} className="rounded-xl border border-amber-800/30 bg-amber-900/10 overflow-hidden">
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <button
+                    onClick={() => setExpandedGenTool(expandedGenTool === gt.id ? null : gt.id)}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                  >
+                    <span className="text-amber-400 flex-shrink-0">🤖</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-medium ${gt.active ? "text-white" : "text-gray-500"}`}>
+                          {gt.label}
+                        </span>
+                        <span className="text-[10px] bg-amber-900/40 text-amber-400 px-1.5 py-0.5 rounded-full">
+                          Agent-created
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5 truncate">{gt.description}</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setGeneratedTools(prev => prev.map(t => t.id === gt.id ? { ...t, active: !t.active } : t));
+                      try { await toggleGeneratedTool(gt.id, !gt.active); } catch { setGeneratedTools(prev => prev.map(t => t.id === gt.id ? { ...t, active: gt.active } : t)); }
+                    }}
+                    className="flex-shrink-0"
+                  >
+                    <ToggleSwitch checked={gt.active} accent="purple" className="pointer-events-none" />
+                  </button>
+                </div>
+                {expandedGenTool === gt.id && (
+                  <div className="px-4 pb-3 space-y-3 border-t border-amber-800/20 pt-3">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                      <div className="text-gray-500">Tool ID</div>
+                      <div className="text-gray-300 font-mono">{gt.tool_id}</div>
+                      <div className="text-gray-500">Created by</div>
+                      <div className="text-gray-300">{gt.created_by_agent_name || "Unknown agent"}</div>
+                      <div className="text-gray-500">Created</div>
+                      <div className="text-gray-300">{new Date(gt.created_at).toLocaleDateString()}</div>
+                    </div>
+                    {gt.functions.length > 0 && (
+                      <div>
+                        <div className="text-[11px] text-gray-500 mb-1">Functions:</div>
+                        {gt.functions.map((fn) => (
+                          <div key={fn.name} className="text-[11px] font-mono text-purple-300 pl-2">{fn.name}</div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={async () => {
+                          if (genToolCode?.id === gt.id) { setGenToolCode(null); return; }
+                          try { const d = await getGeneratedTool(gt.id); setGenToolCode({ id: gt.id, code: d.code || "# No code" }); } catch { setGenToolCode({ id: gt.id, code: "# Failed to load" }); }
+                        }}
+                        className={`px-3 py-1 text-xs rounded-lg transition-colors ${genToolCode?.id === gt.id ? "bg-purple-900/40 text-purple-300" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
+                      >
+                        {genToolCode?.id === gt.id ? "Hide Code" : "View Code"}
+                      </button>
+                      {confirmDeleteGen === gt.id ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-red-400">Delete?</span>
+                          <button onClick={async () => { try { await deleteGeneratedTool(gt.id); setGeneratedTools(prev => prev.filter(t => t.id !== gt.id)); setConfirmDeleteGen(null); } catch {} }} className="px-2 py-1 text-xs rounded-lg bg-red-900/50 text-red-300 hover:bg-red-800/60">Yes</button>
+                          <button onClick={() => setConfirmDeleteGen(null)} className="px-2 py-1 text-xs rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600">No</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setConfirmDeleteGen(gt.id)} className="px-3 py-1 text-xs rounded-lg bg-gray-700 text-red-400 hover:bg-red-900/30 transition-colors">Delete</button>
+                      )}
+                    </div>
+                    {genToolCode?.id === gt.id && (
+                      <div className="mt-2 rounded-lg bg-gray-950 border border-gray-700/50 p-3 overflow-x-auto">
+                        <pre className="text-[11px] font-mono text-gray-300 whitespace-pre-wrap">{genToolCode.code}</pre>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Build Your Own Tool */}
       <details className="group mt-2">

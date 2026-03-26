@@ -72,6 +72,14 @@ def _init_tables():
             data TEXT NOT NULL DEFAULT '{}'
         );
         CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+
+        CREATE TABLE IF NOT EXISTS generated_tools (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL DEFAULT '1',
+            data TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_generated_tools_user ON generated_tools(user_id);
     """)
     conn.commit()
     logger.info("Local SQLite store initialized at %s", DB_PATH)
@@ -90,7 +98,7 @@ class LocalContainer:
         self._table = table
         self._pk_field = partition_key_field
         # Tables that store full documents as JSON blobs
-        self._is_doc_table = table in ("users", "agents", "notifications")
+        self._is_doc_table = table in ("users", "agents", "notifications", "generated_tools")
 
     # ── Single-item operations ───────────────────────────────
 
@@ -121,6 +129,11 @@ class LocalContainer:
                 conn.execute(
                     "INSERT INTO notifications (id, user_id, data) VALUES (?, ?, ?)",
                     (doc_id, body.get("user_id", "1"), json.dumps(body)),
+                )
+            elif self._table == "generated_tools":
+                conn.execute(
+                    "INSERT INTO generated_tools (id, user_id, data, created_at) VALUES (?, ?, ?, ?)",
+                    (doc_id, body.get("user_id", "1"), json.dumps(body), body.get("created_at", "")),
                 )
             else:  # users
                 conn.execute(
@@ -157,6 +170,11 @@ class LocalContainer:
                 conn.execute(
                     "INSERT OR REPLACE INTO notifications (id, user_id, data) VALUES (?, ?, ?)",
                     (doc_id, body.get("user_id", "1"), json.dumps(body)),
+                )
+            elif self._table == "generated_tools":
+                conn.execute(
+                    "INSERT OR REPLACE INTO generated_tools (id, user_id, data, created_at) VALUES (?, ?, ?, ?)",
+                    (doc_id, body.get("user_id", "1"), json.dumps(body), body.get("created_at", "")),
                 )
             else:  # users
                 conn.execute(
@@ -377,5 +395,6 @@ def get_container(name: str) -> LocalContainer:
         "agents": "user_id",
         "messages": "thread_id",
         "notifications": "user_id",
+        "generated_tools": "user_id",
     }
     return LocalContainer(name, pk_fields.get(name, "id"))

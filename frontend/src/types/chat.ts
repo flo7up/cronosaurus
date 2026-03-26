@@ -98,9 +98,31 @@ export interface MCPServer {
 
 // Trigger is now part of Agent (AgentTrigger)
 
+// ── Agent-created (generated) tools ──────────────────────────
+
+export interface GeneratedToolFunction {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+export interface GeneratedTool {
+  id: string;
+  tool_id: string;
+  label: string;
+  description: string;
+  functions: GeneratedToolFunction[];
+  code?: string;
+  active: boolean;
+  created_by_agent_id: string;
+  created_by_agent_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UserPreferences {
   selected_model: string;
-  confirmation_mode: "manual" | "auto";
+  confirmation_mode: "manual" | "auto" | "delayed_auto";
   mcp_servers: MCPServer[];
   tool_preferences: ToolPreference[];
   tool_library: string[];

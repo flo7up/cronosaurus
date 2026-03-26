@@ -814,3 +814,117 @@ def list_delegations(agent_id: str, status: str | None = None, limit: int = 20):
             "completed_at": d.get("completed_at"),
         })
     return result
+
+
+# ── Agent-created tools management ───────────────────────────────
+
+@router.get("/generated-tools/list")
+def list_generated_tools():
+    """List all agent-created tools with their metadata and status."""
+    from app.services.generated_tool_store import generated_tool_store
+    if not generated_tool_store.is_ready:
+        return []
+    tools = generated_tool_store.list_tools()
+    result = []
+    for t in tools:
+        # Resolve creator agent name
+        creator_name = None
+        creator_id = t.get("created_by_agent_id", "")
+        if creator_id:
+            doc = agent_store.get_agent(creator_id)
+            creator_name = doc.get("name") if doc else None
+        result.append({
+            "id": t["id"],
+            "tool_id": t["tool_id"],
+            "label": t["label"],
+            "description": t["description"],
+            "functions": t.get("functions", []),
+            "active": t.get("active", True),
+            "created_by_agent_id": creator_id,
+            "created_by_agent_name": creator_name,
+            "created_at": t.get("created_at", ""),
+            "updated_at": t.get("updated_at", ""),
+        })
+    return result
+
+
+@router.get("/generated-tools/{doc_id}")
+def get_generated_tool(doc_id: str):
+    """Get a single agent-created tool including its code."""
+    from app.services.generated_tool_store import generated_tool_store
+    if not generated_tool_store.is_ready:
+        raise HTTPException(503, "Generated tool store not initialized")
+    doc = generated_tool_store.get_tool(doc_id)
+    if not doc:
+        raise HTTPException(404, "Generated tool not found")
+    creator_name = None
+    creator_id = doc.get("created_by_agent_id", "")
+    if creator_id:
+        agent_doc = agent_store.get_agent(creator_id)
+        creator_name = agent_doc.get("name") if agent_doc else None
+    return {
+        "id": doc["id"],
+        "tool_id": doc["tool_id"],
+        "label": doc["label"],
+        "description": doc["description"],
+        "functions": doc.get("functions", []),
+        "code": doc.get("code", ""),
+        "active": doc.get("active", True),
+        "created_by_agent_id": creator_id,
+        "created_by_agent_name": creator_name,
+        "created_at": doc.get("created_at", ""),
+        "updated_at": doc.get("updated_at", ""),
+    }
+
+
+@router.patch("/generated-tools/{doc_id}")
+def update_generated_tool(doc_id: str, body: dict):
+    """Toggle active status of an agent-created tool."""
+    from app.services.generated_tool_store import generated_tool_store
+    from app.tools.self_extension_tools import unregister_generated_tool, _register_generated_tool
+    if not generated_tool_store.is_ready:
+        raise HTTPException(503, "Generated tool store not initialized")
+
+    allowed_fields = {"active"}
+    updates = {k: v for k, v in body.items() if k in allowed_fields}
+    if not updates:
+        raise HTTPException(400, "No valid fields to update (allowed: active)")
+
+    doc = generated_tool_store.update_tool(doc_id, updates)
+    if not doc:
+        raise HTTPException(404, "Generated tool not found")
+
+    # Update runtime catalog
+    if "active" in updates:
+        if updates["active"]:
+            _register_generated_tool(doc)
+        else:
+            unregister_generated_tool(doc["tool_id"])
+
+    return {"success": True, "active": doc.get("active", True)}
+
+
+@router.delete("/generated-tools/{doc_id}", status_code=204)
+def delete_generated_tool(doc_id: str):
+    """Delete an agent-created tool permanently."""
+    from app.services.generated_tool_store import generated_tool_store
+    from app.tools.self_extension_tools import unregister_generated_tool
+    if not generated_tool_store.is_ready:
+        raise HTTPException(503, "Generated tool store not initialized")
+
+    doc = generated_tool_store.get_tool(doc_id)
+    if not doc:
+        raise HTTPException(404, "Generated tool not found")
+
+    # Remove from runtime catalog
+    unregister_generated_tool(doc["tool_id"])
+
+    # Remove from any agents that have it enabled
+    all_agents = agent_store.list_agents()
+    for agent in all_agents:
+        agent_tools = agent.get("tools", [])
+        if doc["tool_id"] in agent_tools:
+            agent_tools = [t for t in agent_tools if t != doc["tool_id"]]
+            agent_store.update_agent(agent["id"], {"tools": agent_tools})
+
+    generated_tool_store.delete_tool(doc_id)

@@ -155,10 +155,12 @@ class UserService:
 
     def get_confirmation_mode(self, user_id: str = DEFAULT_USER_ID) -> str:
         doc = self._get_user(user_id)
-        return "auto" if doc.get("confirmation_mode") == "auto" else "manual"
+        value = doc.get("confirmation_mode", "manual")
+        return value if value in ("manual", "auto", "delayed_auto") else "manual"
 
     def set_confirmation_mode(self, mode: str, user_id: str = DEFAULT_USER_ID) -> str:
-        normalized = "auto" if str(mode).strip().lower() == "auto" else "manual"
+        raw = str(mode).strip().lower()
+        normalized = raw if raw in ("manual", "auto", "delayed_auto") else "manual"
         doc = self._get_user(user_id)
         doc["confirmation_mode"] = normalized
         self._upsert_user(doc)
